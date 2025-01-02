@@ -1,0 +1,29 @@
+{
+  "name": "sisvet-backend",
+  "version": "1.0.0",
+  "description": "Creacion de dependencias para el backend  del sistema administrador de veterinaria",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JavierBalcazarCruz/sistemaVeterinario.git"
+  },
+  "author": "Javier Balcazar Cruz",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/JavierBalcazarCruz/sistemaVeterinario/issues"
+  },
+  "homepage": "https://github.com/JavierBalcazarCruz/sistemaVeterinario#readme",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mysql2": "^3.12.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
