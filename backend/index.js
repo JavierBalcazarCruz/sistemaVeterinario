@@ -1,6 +1,10 @@
 import express from "express";
 import conectarDB from './config/db.js';
 import veterinarioRoutes from './routes/veterinarioRoutes.js';
+import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
+
+dotenv.config();
 
 const app = express();
 conectarDB();

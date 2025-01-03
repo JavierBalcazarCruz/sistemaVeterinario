@@ -1,14 +1,24 @@
 import express from "express";
 const router = express.Router();
 
-
 import{registrar,
-    perfil
+    perfil,
+    confirmar,
+    autenticar
 }from '../controllers/veterinarioController.js';
 
+import checkAuth from '../middleware/authMiddleware.js';
 
+
+/*Registrar doctor*/
 router.post("/",registrar);
 
-router.get('/perfil', perfil);
+/*Confirmar Cuenta*/
+router.get('/confirmar/:token', confirmar);
 
+/*Autenticar Cuenta*/
+router.post("/login",autenticar);
+
+/*Perfil del doctor*/
+router.get('/perfil',checkAuth, perfil);
 export default router;

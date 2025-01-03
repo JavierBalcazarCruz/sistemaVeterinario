@@ -1,13 +1,80 @@
 import conectarDB from '../config/db.js';
+import generarId from '../helpers/generarId.js';
+import generarJWT from '../helpers/generarJWT.js';
+import bcrypt from 'bcrypt';
 
+
+/*Registrar doctor*/
 const registrar = async (req, res) => {
-    const connection = await conectarDB();
+    let connection;
     
     try {
-        const { nombre, apellidos, email, password_hash, rol, id_licencia_clinica, account_status } = req.body;
-
-        // Realizamos la inserción
-        const [resultado] = await connection.execute(
+        // 1. Extracción y limpieza de datos
+        const { 
+            email = '', 
+            nombre = '', 
+            apellidos = '', 
+            password, // Cambiado de password_hash a password
+            rol, 
+            id_licencia_clinica 
+        } = req.body;
+ 
+        // 2. Limpieza de datos
+        const emailLimpio = email.trim().toLowerCase();
+        const nombreLimpio = nombre.trim();
+        const apellidosLimpio = apellidos.trim();
+ 
+        // 3. Validaciones
+        if (!emailLimpio || !nombreLimpio || !apellidosLimpio || !password) {
+            return res.status(400).json({ msg: 'Todos los campos son obligatorios' });
+        }
+ 
+        // Validar longitud mínima del password
+        if (password.length < 6) {
+            return res.status(400).json({ 
+                msg: 'El password debe tener al menos 6 caracteres' 
+            });
+        }
+ 
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(emailLimpio)) {
+            return res.status(400).json({ msg: 'Email no válido' });
+        }
+ 
+        const rolesPermitidos = ['admin', 'doctor', 'recepcion'];
+        if (!rolesPermitidos.includes(rol)) {
+            return res.status(400).json({ msg: 'Rol no válido' });
+        }
+ 
+        // 4. Hash del password
+        const salt = await bcrypt.genSalt(10);
+        const password_hash = await bcrypt.hash(password, salt);
+ 
+        // 5. Conexión a la base de datos
+        connection = await conectarDB();
+ 
+        // 6. Verificación de email duplicado
+        const [existingUsers] = await connection.execute(
+            'SELECT id FROM usuarios WHERE email = ?',
+            [emailLimpio]
+        );
+ 
+        if (existingUsers.length > 0) {
+            return res.status(400).json({ msg: 'El email ya está registrado' });
+        }
+ 
+        // 7. Verificación de licencia válida
+        const [licenciaExiste] = await connection.execute(
+            'SELECT id FROM licencias_clinica WHERE id = ? AND status = "activa"',
+            [id_licencia_clinica]
+        );
+ 
+        if (licenciaExiste.length === 0) {
+            return res.status(400).json({ msg: 'La licencia no existe o no está activa' });
+        }
+ 
+        // 8. Inserción del usuario con password hasheado
+        const [resultadoUsuario] = await connection.execute(
             `INSERT INTO usuarios (
                 nombre, 
                 apellidos, 
@@ -15,40 +82,261 @@ const registrar = async (req, res) => {
                 password_hash, 
                 rol, 
                 id_licencia_clinica, 
-                account_status,
-                email_verified_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-            [
-                nombre,
-                apellidos,
-                email,
-                password_hash,
-                rol,
-                id_licencia_clinica,
                 account_status
+            ) VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
+            [
+                nombreLimpio,
+                apellidosLimpio,
+                emailLimpio,
+                password_hash, // Ahora usamos el password hasheado
+                rol,
+                id_licencia_clinica
             ]
         );
-
-        res.json({
-            msg: 'Usuario registrado correctamente',
-            id: resultado.insertId
-        });
-
-    } catch (error) {
-        console.log(error);
+ 
+        const idUsuario = resultadoUsuario.insertId;
+ 
+        // 9. Generación y almacenamiento del token de verificación
+        const token = generarId();
+        const HORAS_EXPIRACION = 24;
         
-        if (error.code === 'ER_DUP_ENTRY') {
-            return res.status(400).json({ msg: 'El email ya está registrado' });
-        }
-
-        res.status(500).json({ msg: 'Hubo un error al registrar el usuario' });
+        await connection.execute(
+            `INSERT INTO user_tokens (
+                id_usuario, 
+                token_type, 
+                token_hash, 
+                expires_at
+            ) VALUES (?, 'verification', ?, DATE_ADD(NOW(), INTERVAL ? HOUR))`,
+            [idUsuario, token, HORAS_EXPIRACION]
+        );
+ 
+        // 10. Respuesta al cliente
+        res.json({
+            msg: 'Usuario registrado correctamente. Revisa tu email para verificar tu cuenta.',
+            id: idUsuario,
+            nombre: nombreLimpio,
+            email: emailLimpio,
+            rol
+        });
+ 
+    } catch (error) {
+        console.log('Error en registro:', error.message);
+        res.status(500).json({ msg: 'Error interno del servidor' });
     } finally {
-        await connection.end();
+        if (connection) {
+            try {
+                await connection.end();
+            } catch (error) {
+                console.log('Error al cerrar la conexión:', error.message);
+            }
+        }
     }
-};
+ };
+ 
 
 const perfil = async (req, res) => {
-    res.json("Mostrando perfil");
+    res.json({ msg: 'Mostrando perfil' });
 };
 
-export { registrar, perfil };
+/* Confirmar Cuenta  del doctor*/
+const confirmar = async (req, res) => {
+    let connection;
+    try {
+        const token = req.params.token?.trim();
+ 
+        // Validaciones del token
+        if (!token) {
+            return res.status(400).json({ msg: 'Token no proporcionado' });
+        }
+ 
+        // Validar que token solo contenga caracteres permitidos
+        const tokenRegex = /^[a-zA-Z0-9\-_]+$/;
+        if (!tokenRegex.test(token)) {
+            return res.status(400).json({ msg: 'Token inválido' });
+        }
+ 
+        connection = await conectarDB();
+ 
+        // Verificar token usando parámetros preparados
+        const [tokens] = await connection.execute(
+            `SELECT ut.id, ut.id_usuario, ut.expires_at, u.account_status 
+             FROM user_tokens ut
+             INNER JOIN usuarios u ON u.id = ut.id_usuario
+             WHERE ut.token_hash = ? 
+             AND ut.token_type = 'verification'
+             AND ut.expires_at > NOW()
+             AND ut.used_at IS NULL
+             AND u.account_status = 'pending'
+             LIMIT 1`,
+            [token]
+        );
+        if (tokens.length === 0) {
+            return res.status(400).json({ 
+                msg: 'Token no valido'
+            });
+        }
+ 
+        // Iniciar transacción
+        await connection.beginTransaction();
+ 
+        try {
+            // Activar cuenta
+            await connection.execute(
+                `UPDATE usuarios 
+                 SET account_status = 'active',
+                     email_verified_at = NOW() 
+                 WHERE id = ? AND account_status = 'pending'`,
+                [tokens[0].id_usuario]
+            );
+ 
+            // Marcar token como usado
+            await connection.execute(
+                `UPDATE user_tokens 
+                 SET used_at = NOW() 
+                 WHERE id = ? AND used_at IS NULL`,
+                [tokens[0].id]
+            );
+ 
+            await connection.commit();
+            res.json({ msg: 'Cuenta verificada correctamente' });
+ 
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        }
+ 
+    } catch (error) {
+        console.log('Error en confirmación:', error.message);
+        res.status(500).json({ msg: 'Error en el servidor' });
+    } finally {
+        if (connection) {
+            try {
+                await connection.end();
+            } catch (error) {
+                console.log('Error al cerrar conexión:', error.message);
+            }
+        }
+    }
+ };
+
+
+ /* Autentificar veterinario */
+ const autenticar = async (req, res) => {
+    let connection;
+    try {
+        // Extraer datos del request
+        const { email, password } = req.body;
+ 
+        // Validación básica de campos
+        if (!email || !password) {
+            return res.status(400).json({ msg: 'Todos los campos son obligatorios' });
+        }
+ 
+        // Limpieza de email
+        const emailLimpio = email.trim().toLowerCase();
+ 
+        connection = await conectarDB();
+ 
+        // Buscar usuario con toda su información relevante
+        const [users] = await connection.execute(
+            `SELECT id, nombre, apellidos, email, password_hash, 
+                    account_status, failed_login_attempts, rol,
+                    id_licencia_clinica
+             FROM usuarios 
+             WHERE email = ?`,
+            [emailLimpio]
+        );
+ 
+        const usuario = users[0];
+ 
+        // Validar existencia del usuario
+        if (!usuario) {
+            return res.status(400).json({ msg: 'Credenciales incorrectas' });
+        }
+ 
+        // Verificar si la cuenta está bloqueada por intentos fallidos
+        if (usuario.failed_login_attempts >= 5) {
+            await connection.execute(
+                `UPDATE usuarios 
+                 SET account_status = 'suspended' 
+                 WHERE id = ?`,
+                [usuario.id]
+            );
+            return res.status(400).json({ 
+                msg: 'Cuenta bloqueada por seguridad. Contacte al administrador.' 
+            });
+        }
+ 
+        // Verificar estado de la cuenta
+        if (usuario.account_status !== 'active') {
+            return res.status(403).json({ 
+                msg: 'Cuenta pendiente de confirmar o cuenta suspendida' 
+            });
+        }
+ 
+        // Verificar licencia activa
+        const [licencia] = await connection.execute(
+            `SELECT status FROM licencias_clinica 
+             WHERE id = ? AND status = 'activa'`,
+            [usuario.id_licencia_clinica]
+        );
+ 
+        if (licencia.length === 0) {
+            return res.status(400).json({ 
+                msg: 'Licencia inactiva o expirada' 
+            });
+        }
+ 
+        // Verificar password
+        const passwordCorrecto = await bcrypt.compare(
+            password, 
+            usuario.password_hash
+        );
+ 
+        if (!passwordCorrecto) {
+            // Incrementar intentos fallidos
+            await connection.execute(
+                `UPDATE usuarios 
+                 SET failed_login_attempts = failed_login_attempts + 1,
+                     last_login = NOW()
+                 WHERE id = ?`,
+                [usuario.id]
+            );
+            return res.status(400).json({ msg: 'Credenciales incorrectas' });
+        }
+ 
+        // Login exitoso: resetear intentos y actualizar último acceso
+        await connection.execute(
+            `UPDATE usuarios 
+             SET failed_login_attempts = 0,
+                 last_login = NOW()
+             WHERE id = ?`,
+            [usuario.id]
+        );
+ 
+        // Generar JWT utilizando el helper
+        const token = generarJWT(usuario.id);
+ 
+        // Respuesta exitosa
+        res.json({
+            id: usuario.id,
+            nombre: usuario.nombre,
+            apellidos: usuario.apellidos,
+            email: usuario.email,
+            rol: usuario.rol,
+            token
+        });
+ 
+    } catch (error) {
+        console.log('Error en autenticación:', error);
+        res.status(500).json({ msg: 'Error del servidor' });
+    } finally {
+        if (connection) await connection.end();
+    }
+ };
+ // Función auxiliar para verificar password - usar en login
+const comprobarPassword = async (passwordFormulario, passwordHash) => {
+    return await bcrypt.compare(passwordFormulario, passwordHash);
+ };
+
+export { registrar, perfil, confirmar,autenticar };
