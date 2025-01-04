@@ -134,9 +134,24 @@ const registrar = async (req, res) => {
  };
  
 
-const perfil = async (req, res) => {
-    res.json({ msg: 'Mostrando perfil' });
-};
+ const perfil = async (req, res) => {
+    try {
+        // req.usuario ya contiene los datos básicos del usuario autenticado
+        const { id, nombre, apellidos, email, rol } = req.usuario;
+        
+        res.json({
+            id,
+            nombre,
+            apellidos, 
+            email,
+            rol
+        });
+        
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ msg: 'Error al obtener perfil' });
+    }
+ };
 
 /* Confirmar Cuenta  del doctor*/
 const confirmar = async (req, res) => {
@@ -334,9 +349,255 @@ const confirmar = async (req, res) => {
         if (connection) await connection.end();
     }
  };
+
+
+ /* Olvide mi password */
+ const olvidePassword = async (req, res) => {
+    let connection;
+    try {
+        const { email } = req.body;
+ 
+        // Validaciones básicas
+        if (!email) {
+            return res.status(400).json({ msg: 'El email es obligatorio' });
+        }
+ 
+        const emailLimpio = email.trim().toLowerCase();
+        
+        // Validar formato email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(emailLimpio)) {
+            return res.status(400).json({ msg: 'Email no válido' });
+        }
+ 
+        connection = await conectarDB();
+ 
+        // Verificar usuario existente y activo
+        const [users] = await connection.execute(
+            `SELECT id, nombre, email, account_status 
+             FROM usuarios 
+             WHERE email = ? 
+             AND account_status != 'suspended'`,
+            [emailLimpio]
+        );
+ 
+        if (!users.length) {
+            return res.status(400).json({ msg: 'El email no está registrado' });
+        }
+ 
+        const usuario = users[0];
+ 
+        // Verificar si ya existe un token válido
+        const [tokenExistente] = await connection.execute(
+            `SELECT id FROM user_tokens 
+             WHERE id_usuario = ? 
+             AND token_type = 'reset' 
+             AND expires_at > NOW() 
+             AND used_at IS NULL`,
+            [usuario.id]
+        );
+ 
+        // Si existe token válido, invalidarlo
+        if (tokenExistente.length) {
+            await connection.execute(
+                `UPDATE user_tokens 
+                 SET used_at = NOW() 
+                 WHERE id = ?`,
+                [tokenExistente[0].id]
+            );
+        }
+ 
+        // Generar nuevo token
+        const token = generarId();
+        const HORAS_EXPIRACION = 24;
+ 
+        // Guardar token
+        await connection.execute(
+            `INSERT INTO user_tokens (
+                id_usuario, 
+                token_type, 
+                token_hash, 
+                expires_at
+            ) VALUES (?, 'reset', ?, DATE_ADD(NOW(), INTERVAL ? HOUR))`,
+            [usuario.id, token, HORAS_EXPIRACION]
+        );
+ 
+        // Enviar email
+        /*
+        await emailOlvidePassword({
+            email: usuario.email,
+            nombre: usuario.nombre,
+            token
+        });
+ */
+        res.json({ msg: 'Se ha enviado un correo electrónico con las instrucciones' });
+ 
+    } catch (error) {
+        console.log('Error en recuperación de contraseña:', error);
+        res.status(500).json({ msg: 'Error del servidor' });
+    } finally {
+        if (connection) await connection.end();
+    }
+ };
+
+ /* Comprobar si el token existe cuando se olvido mi password */
+ const comprobarToken = async (req, res) => {
+    let connection;
+    try {
+        // Extraer y limpiar token
+        const token = req.params.token?.trim();
+ 
+        // Validaciones básicas
+        if (!token) {
+            return res.status(400).json({ msg: 'Token no proporcionado' });
+        }
+ 
+        // Validar caracteres permitidos
+        const tokenRegex = /^[a-zA-Z0-9\-_]+$/;
+        if (!tokenRegex.test(token)) {
+            return res.status(400).json({ msg: 'Token inválido' });
+        }
+ 
+        connection = await conectarDB();
+ 
+        // Buscar token válido y activo
+        const [tokens] = await connection.execute(
+            `SELECT ut.id, ut.id_usuario, u.nombre, u.email 
+             FROM user_tokens ut
+             INNER JOIN usuarios u ON u.id = ut.id_usuario
+             WHERE ut.token_hash = ?
+             AND ut.token_type = 'reset'
+             AND ut.expires_at > NOW()
+             AND ut.used_at IS NULL
+             AND u.account_status != 'suspended'`,
+            [token]
+        );
+ 
+        if (!tokens.length) {
+            return res.status(400).json({ msg: 'Token no válido o expirado' });
+        }
+ 
+        // Retornar información básica del usuario
+        res.json({
+            msg: 'Token válido',
+            nombre: tokens[0].nombre,
+            email: tokens[0].email
+        });
+ 
+    } catch (error) {
+        console.log('Error al validar token:', error);
+        res.status(500).json({ msg: 'Error del servidor' });
+    } finally {
+        if (connection) await connection.end();
+    }
+ };
+
+ /* Restablecer nuevo password  */
+ const nuevoPassword = async (req, res) => {
+    let connection;
+    try {
+        // 1. Validación de datos de entrada
+        const token = req.params.token?.trim();
+        const { password } = req.body;
+ 
+        // Validaciones básicas
+        if (!token || !password) {
+            return res.status(400).json({ msg: 'Todos los campos son requeridos' });
+        }
+ 
+        // Validar formato de token
+        const tokenRegex = /^[a-zA-Z0-9\-_]+$/;
+        if (!tokenRegex.test(token)) {
+            return res.status(400).json({ msg: 'Token inválido' });
+        }
+ 
+        // Validar requisitos del password
+        if (password.length < 6) {
+            return res.status(400).json({ 
+                msg: 'El password debe tener al menos 6 caracteres' 
+            });
+        }
+ 
+        connection = await conectarDB();
+ 
+        // Iniciar transacción
+        await connection.beginTransaction();
+ 
+        try {
+            // 2. Verificar token válido
+            const [tokens] = await connection.execute(
+                `SELECT ut.id, ut.id_usuario, u.account_status
+                 FROM user_tokens ut
+                 INNER JOIN usuarios u ON u.id = ut.id_usuario
+                 WHERE ut.token_hash = ?
+                 AND ut.token_type = 'reset'
+                 AND ut.expires_at > NOW()
+                 AND ut.used_at IS NULL
+                 AND u.account_status != 'suspended'`,
+                [token]
+            );
+ 
+            if (!tokens.length) {
+                await connection.rollback();
+                return res.status(400).json({ 
+                    msg: 'Token no válido o expirado' 
+                });
+            }
+ 
+            // 3. Generar hash del nuevo password
+            const salt = await bcrypt.genSalt(10);
+            const password_hash = await bcrypt.hash(password, salt);
+ 
+            // 4. Actualizar password
+            await connection.execute(
+                `UPDATE usuarios 
+                 SET password_hash = ?,
+                     password_reset_required = FALSE,
+                     updated_at = NOW()
+                 WHERE id = ?`,
+                [password_hash, tokens[0].id_usuario]
+            );
+ 
+            // 5. Marcar token como usado
+            await connection.execute(
+                `UPDATE user_tokens 
+                 SET used_at = NOW()
+                 WHERE id = ?`,
+                [tokens[0].id]
+            );
+ 
+            // 6. Invalidar otros tokens de reset del usuario
+            await connection.execute(
+                `UPDATE user_tokens 
+                 SET used_at = NOW()
+                 WHERE id_usuario = ?
+                 AND token_type = 'reset'
+                 AND used_at IS NULL`,
+                [tokens[0].id_usuario]
+            );
+ 
+            // Confirmar transacción
+            await connection.commit();
+ 
+            res.json({ msg: 'Contraseña actualizada correctamente' });
+ 
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        }
+ 
+    } catch (error) {
+        console.log('Error al cambiar password:', error);
+        res.status(500).json({ msg: 'Error del servidor' });
+    } finally {
+        if (connection) await connection.end();
+    }
+ };
+
+
  // Función auxiliar para verificar password - usar en login
 const comprobarPassword = async (passwordFormulario, passwordHash) => {
     return await bcrypt.compare(passwordFormulario, passwordHash);
  };
 
-export { registrar, perfil, confirmar,autenticar };
+export { registrar, perfil, confirmar,autenticar,olvidePassword,comprobarToken,nuevoPassword };
