@@ -73,6 +73,7 @@ const agregarPaciente = async (req, res) => {
         // 5. Iniciar conexión y transacción
         connection = await conectarDB();
         await connection.beginTransaction();
+
         try {
             // 6. Verificar que el doctor existe y está activo
             const [doctores] = await connection.execute(
@@ -192,11 +193,13 @@ const agregarPaciente = async (req, res) => {
             // 12. Insertar paciente
             const [resultPaciente] = await connection.execute(
                 `INSERT INTO pacientes (
-                    id_propietario, id_raza, nombre_mascota,
-                    fecha_nacimiento, peso, foto_url
-                ) VALUES (?, ?, ?, ?, ?, ?)`,
+                    id_propietario, id_doctor, id_usuario, id_raza, 
+                    nombre_mascota, fecha_nacimiento, peso, foto_url
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     id_propietario,
+                    id_doctor,           // Nuevo campo
+                    req.usuario.id,      // Nuevo campo
                     datosLimpios.paciente.id_raza,
                     datosLimpios.paciente.nombre,
                     datosLimpios.paciente.fecha_nacimiento,
