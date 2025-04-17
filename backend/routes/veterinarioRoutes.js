@@ -1,13 +1,15 @@
 import express from "express";
 const router = express.Router();
 
-import{registrar,
+import{
+    registrar,
     perfil,
     confirmar,
     autenticar,
     olvidePassword,
     comprobarToken,
-    nuevoPassword
+    nuevoPassword,
+    reenviarVerificacion
 }from '../controllers/veterinarioController.js';
 
 import checkAuth from '../middleware/authMiddleware.js';
@@ -21,6 +23,9 @@ router.get('/confirmar/:token', confirmar);
 
 /*Autenticar Cuenta*/
 router.post("/login",autenticar);
+
+/* Reenviar correo de verificación */
+router.post("/reenviar-verificacion", reenviarVerificacion);
 
 /*****************************Fin de Area pública******************************/
 

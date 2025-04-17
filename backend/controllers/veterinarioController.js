@@ -131,10 +131,10 @@ const registrar = async (req, res) => {
             }
         }
     }
- };
+};
  
 
- const perfil = async (req, res) => {
+const perfil = async (req, res) => {
     try {
         // req.usuario ya contiene los datos básicos del usuario autenticado
         const { id, nombre, apellidos, email, rol } = req.usuario;
@@ -151,7 +151,7 @@ const registrar = async (req, res) => {
         console.log(error);
         res.status(500).json({ msg: 'Error al obtener perfil' });
     }
- };
+};
 
 /* Confirmar Cuenta  del doctor*/
 const confirmar = async (req, res) => {
@@ -232,11 +232,11 @@ const confirmar = async (req, res) => {
             }
         }
     }
- };
+};
 
 
  /* Autentificar veterinario */
- const autenticar = async (req, res) => {
+const autenticar = async (req, res) => {
     let connection;
     try {
         // Extraer datos del request
@@ -348,11 +348,11 @@ const confirmar = async (req, res) => {
     } finally {
         if (connection) await connection.end();
     }
- };
+};
 
 
  /* Olvide mi password */
- const olvidePassword = async (req, res) => {
+const olvidePassword = async (req, res) => {
     let connection;
     try {
         const { email } = req.body;
@@ -377,7 +377,7 @@ const confirmar = async (req, res) => {
             `SELECT id, nombre, email, account_status 
              FROM usuarios 
              WHERE email = ? 
-             AND account_status != 'suspended'`,
+             AND account_status = 'active'`,
             [emailLimpio]
         );
  
@@ -438,10 +438,10 @@ const confirmar = async (req, res) => {
     } finally {
         if (connection) await connection.end();
     }
- };
+};
 
  /* Comprobar si el token existe cuando se olvido mi password */
- const comprobarToken = async (req, res) => {
+const comprobarToken = async (req, res) => {
     let connection;
     try {
         // Extraer y limpiar token
@@ -490,10 +490,10 @@ const confirmar = async (req, res) => {
     } finally {
         if (connection) await connection.end();
     }
- };
+};
 
  /* Restablecer nuevo password  */
- const nuevoPassword = async (req, res) => {
+const nuevoPassword = async (req, res) => {
     let connection;
     try {
         // 1. Validación de datos de entrada
@@ -592,12 +592,115 @@ const confirmar = async (req, res) => {
     } finally {
         if (connection) await connection.end();
     }
- };
+};
 
 
  // Función auxiliar para verificar password - usar en login
 const comprobarPassword = async (passwordFormulario, passwordHash) => {
     return await bcrypt.compare(passwordFormulario, passwordHash);
- };
+};
 
-export { registrar, perfil, confirmar,autenticar,olvidePassword,comprobarToken,nuevoPassword };
+/**
+ * Reenvía un nuevo token de verificación para cuentas pendientes
+ * Permite a los usuarios obtener un nuevo token cuando el original ha expirado
+ */
+const reenviarVerificacion = async (req, res) => {
+    let connection;
+    try {
+        // 1. Extraer el email del cuerpo de la petición
+        const { email } = req.body;
+        
+        // 2. Validar que se proporcionó un email
+        if (!email) {
+            return res.status(400).json({ msg: 'El email es obligatorio' });
+        }
+        
+        // 3. Limpiar y normalizar el email
+        const emailLimpio = email.trim().toLowerCase();
+        
+        // 4. Validar formato de email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(emailLimpio)) {
+            return res.status(400).json({ msg: 'Email no válido' });
+        }
+        
+        // 5. Conectar a la base de datos
+        connection = await conectarDB();
+        
+        // 6. Verificar que el usuario existe y está pendiente de verificación
+        const [users] = await connection.execute(
+            `SELECT id, nombre, email 
+             FROM usuarios 
+             WHERE email = ? 
+             AND account_status = 'pending'`,
+            [emailLimpio]
+        );
+        
+        // 7. Si no se encuentra un usuario pendiente, retornar error
+        if (!users.length) {
+            return res.status(400).json({ 
+                msg: 'No se encontró una cuenta pendiente con ese email' 
+            });
+        }
+        
+        const usuario = users[0];
+        
+        // 8. Invalidar todos los tokens de verificación anteriores para este usuario
+        await connection.execute(
+            `UPDATE user_tokens 
+             SET used_at = NOW() 
+             WHERE id_usuario = ? 
+             AND token_type = 'verification' 
+             AND used_at IS NULL`,
+            [usuario.id]
+        );
+        
+        // 9. Generar un nuevo token único
+        const token = generarId();
+        const HORAS_EXPIRACION = 24;
+        
+        // 10. Guardar el nuevo token en la base de datos
+        await connection.execute(
+            `INSERT INTO user_tokens (
+                id_usuario, 
+                token_type, 
+                token_hash, 
+                expires_at
+            ) VALUES (?, 'verification', ?, DATE_ADD(NOW(), INTERVAL ? HOUR))`,
+            [usuario.id, token, HORAS_EXPIRACION]
+        );
+        
+        // 11. Aquí iría el código para enviar el email con el nuevo token
+        // Ejemplo: await enviarEmailVerificacion(usuario.email, usuario.nombre, token);
+        
+        // 12. Respuesta exitosa
+        res.json({ 
+            msg: 'Se ha enviado un nuevo correo de verificación'
+        });
+        
+    } catch (error) {
+        // 13. Manejo de errores
+        console.log('Error en reenvío de verificación:', error);
+        res.status(500).json({ msg: 'Error del servidor' });
+    } finally {
+        // 14. Cerrar la conexión a la base de datos
+        if (connection) {
+            try {
+                await connection.end();
+            } catch (error) {
+                console.log('Error al cerrar conexión:', error);
+            }
+        }
+    }
+};
+
+export { 
+    registrar, 
+    perfil, 
+    confirmar, 
+    autenticar, 
+    olvidePassword, 
+    comprobarToken, 
+    nuevoPassword,
+    reenviarVerificacion 
+};
