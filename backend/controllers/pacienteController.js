@@ -253,8 +253,92 @@ const agregarPaciente = async (req, res) => {
     }
 };
 const obtenerPacientes = async (req, res) => {
-   
-  
+    let connection;
+    try {
+        // Obtener conexión a la base de datos
+        connection = await conectarDB();
+        
+        // Verificar si el usuario es un doctor o tiene otro rol
+        if (req.usuario.rol === 'doctor') {
+            // Si es doctor, obtener su ID de doctor
+            const [doctores] = await connection.execute(
+                `SELECT id FROM doctores WHERE id_usuario = ?`,
+                [req.usuario.id]
+            );
+            
+            if (doctores.length === 0) {
+                return res.status(404).json({ msg: 'No se encontró el doctor asociado al usuario' });
+            }
+            
+            const id_doctor = doctores[0].id;
+            
+            // Consultar pacientes asociados a este doctor
+            const [pacientes] = await connection.execute(
+                `SELECT p.*, r.nombre AS nombre_raza, e.nombre AS especie,
+                        pr.nombre AS nombre_propietario, pr.apellidos AS apellidos_propietario
+                 FROM pacientes p
+                 INNER JOIN razas r ON p.id_raza = r.id
+                 INNER JOIN especies e ON r.id_especie = e.id
+                 INNER JOIN propietarios pr ON p.id_propietario = pr.id
+                 WHERE p.id_doctor = ?
+                 ORDER BY p.nombre_mascota ASC`,
+                [id_doctor]
+            );
+            
+            return res.json(pacientes);
+        } else if (req.usuario.rol === 'admin' || req.usuario.rol === 'superadmin') {
+            // Para admin o superadmin, mostrar todos los pacientes de la clínica
+            const [pacientes] = await connection.execute(
+                `SELECT p.*, r.nombre AS nombre_raza, e.nombre AS especie,
+                        pr.nombre AS nombre_propietario, pr.apellidos AS apellidos_propietario,
+                        CONCAT(u.nombre, ' ', u.apellidos) AS doctor
+                 FROM pacientes p
+                 INNER JOIN razas r ON p.id_raza = r.id
+                 INNER JOIN especies e ON r.id_especie = e.id
+                 INNER JOIN propietarios pr ON p.id_propietario = pr.id
+                 INNER JOIN doctores d ON p.id_doctor = d.id
+                 INNER JOIN usuarios u ON d.id_usuario = u.id
+                 WHERE u.id_licencia_clinica = ?
+                 ORDER BY p.nombre_mascota ASC`,
+                [req.usuario.id_licencia_clinica]
+            );
+            
+            return res.json(pacientes);
+        } else if (req.usuario.rol === 'recepcion') {
+            // Para recepción, mostrar todos los pacientes de la clínica sin filtrar por doctor
+            const [pacientes] = await connection.execute(
+                `SELECT p.*, r.nombre AS nombre_raza, e.nombre AS especie,
+                        pr.nombre AS nombre_propietario, pr.apellidos AS apellidos_propietario,
+                        CONCAT(u.nombre, ' ', u.apellidos) AS doctor
+                 FROM pacientes p
+                 INNER JOIN razas r ON p.id_raza = r.id
+                 INNER JOIN especies e ON r.id_especie = e.id
+                 INNER JOIN propietarios pr ON p.id_propietario = pr.id
+                 INNER JOIN doctores d ON p.id_doctor = d.id
+                 INNER JOIN usuarios u ON d.id_usuario = u.id
+                 WHERE u.id_licencia_clinica = ?
+                 ORDER BY p.nombre_mascota ASC`,
+                [req.usuario.id_licencia_clinica]
+            );
+            
+            return res.json(pacientes);
+        }
+        
+        // Si llega aquí, el rol no está contemplado
+        return res.status(403).json({ msg: 'Rol no autorizado para esta operación' });
+        
+    } catch (error) {
+        console.error('Error en obtenerPacientes:', error);
+        res.status(500).json({ msg: 'Error al obtener los pacientes' });
+    } finally {
+        if (connection) {
+            try {
+                await connection.end();
+            } catch (error) {
+                console.error('Error al cerrar conexión:', error);
+            }
+        }
+    }
 };
 
 //Obtener paciente especifico
