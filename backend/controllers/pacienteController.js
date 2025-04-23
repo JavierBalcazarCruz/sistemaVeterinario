@@ -341,9 +341,88 @@ const obtenerPacientes = async (req, res) => {
     }
 };
 
-//Obtener paciente especifico
+/**
+ * Obtiene información detallada de un paciente específico
+ * Valida que el usuario tenga permisos para ver este paciente
+ */
 const obtenerPaciente = async (req, res) => {
-}
+    let connection;
+    try {
+        // 1. Extraer ID del paciente de los parámetros
+        const { id } = req.params;
+        
+        // 2. Validar que el ID sea un número válido
+        const pacienteId = parseInt(id);
+        if (isNaN(pacienteId) || pacienteId <= 0) {
+            return res.status(400).json({ msg: 'ID de paciente no válido' });
+        }
+        
+        // 3. Establecer conexión a la BD
+        connection = await conectarDB();
+        
+        // 4. Obtener información del paciente con datos relacionados
+        const [pacientes] = await connection.execute(
+            `SELECT p.*, r.nombre AS nombre_raza, e.nombre AS especie,
+                    pr.nombre AS nombre_propietario, pr.apellidos AS apellidos_propietario,
+                    d.id AS doctor_id, u.id AS doctor_usuario_id
+             FROM pacientes p
+             INNER JOIN razas r ON p.id_raza = r.id
+             INNER JOIN especies e ON r.id_especie = e.id
+             INNER JOIN propietarios pr ON p.id_propietario = pr.id
+             INNER JOIN doctores d ON p.id_doctor = d.id
+             INNER JOIN usuarios u ON d.id_usuario = u.id
+             WHERE p.id = ?`,
+            [pacienteId]
+        );
+        
+        // 5. Verificar si el paciente existe
+        if (pacientes.length === 0) {
+            return res.status(404).json({ msg: 'Paciente no encontrado' });
+        }
+        
+        const paciente = pacientes[0];
+        
+        // 6. Validar permisos según el rol del usuario
+        if (req.usuario.rol === 'doctor') {
+            // Obtener el ID del doctor del usuario autenticado
+            const [doctores] = await connection.execute(
+                `SELECT id FROM doctores WHERE id_usuario = ?`,
+                [req.usuario.id]
+            );
+            
+            if (doctores.length === 0) {
+                return res.status(403).json({ msg: 'Doctor no encontrado' });
+            }
+            
+            // Verificar que el paciente pertenezca a este doctor
+            if (paciente.doctor_id !== doctores[0].id) {
+                return res.status(403).json({ msg: 'No tienes permiso para acceder a este paciente' });
+            }
+        } else if (req.usuario.rol !== 'admin' && req.usuario.rol !== 'superadmin' && req.usuario.rol !== 'recepcion') {
+            // Si no es doctor, admin, superadmin o recepción, denegar acceso
+            return res.status(403).json({ msg: 'No tienes permiso para acceder a este paciente' });
+        }
+        
+        // 7. Limpiar información sensible o interna antes de enviar
+        delete paciente.doctor_id;
+        delete paciente.doctor_usuario_id;
+        
+        // 8. Devolver la información del paciente
+        res.json(paciente);
+        
+    } catch (error) {
+        console.error('Error en obtenerPaciente:', error);
+        res.status(500).json({ msg: 'Error al obtener el paciente' });
+    } finally {
+        if (connection) {
+            try {
+                await connection.end();
+            } catch (error) {
+                console.error('Error al cerrar conexión:', error);
+            }
+        }
+    }
+};
 
 const actualizarPaciente = async (req, res) => {   
 };
