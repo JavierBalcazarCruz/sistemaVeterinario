@@ -424,12 +424,452 @@ const obtenerPaciente = async (req, res) => {
     }
 };
 
-const actualizarPaciente = async (req, res) => {   
+/**
+ * Actualiza la información de un paciente existente
+ * Verifica permisos según el rol del usuario y validaciones de datos
+ */
+const actualizarPaciente = async (req, res) => {
+    let connection;
+    try {
+        // 1. Extraer ID del paciente de los parámetros
+        const { id } = req.params;
+        
+        // 2. Validar que el ID sea un número válido
+        const pacienteId = parseInt(id);
+        if (isNaN(pacienteId) || pacienteId <= 0) {
+            return res.status(400).json({ msg: 'ID de paciente no válido' });
+        }
+        
+        // 3. Extraer datos del cuerpo de la petición
+        const {
+            // Datos del paciente
+            nombre_mascota,
+            fecha_nacimiento,
+            peso,
+            id_raza,
+            foto_url,
+            // Datos del propietario
+            nombre_propietario,
+            apellidos_propietario,
+            email,
+            telefono,
+            tipo_telefono,
+            // Datos de dirección
+            calle,
+            numero_ext,
+            numero_int,
+            codigo_postal,
+            colonia,
+            id_municipio
+        } = req.body;
+        
+        // 4. Establecer conexión a la BD
+        connection = await conectarDB();
+        
+        // 5. Obtener información actual del paciente y verificar existencia
+        const [pacientes] = await connection.execute(
+            `SELECT p.*, d.id AS doctor_id, pr.id AS propietario_id
+             FROM pacientes p
+             INNER JOIN doctores d ON p.id_doctor = d.id
+             INNER JOIN propietarios pr ON p.id_propietario = pr.id
+             WHERE p.id = ?`,
+            [pacienteId]
+        );
+        
+        if (pacientes.length === 0) {
+            return res.status(404).json({ msg: 'Paciente no encontrado' });
+        }
+        
+        const pacienteActual = pacientes[0];
+        
+        // 6. Verificar permisos según el rol
+        if (req.usuario.rol === 'doctor') {
+            // Obtener el ID del doctor del usuario autenticado
+            const [doctores] = await connection.execute(
+                `SELECT id FROM doctores WHERE id_usuario = ?`,
+                [req.usuario.id]
+            );
+            
+            if (doctores.length === 0) {
+                return res.status(403).json({ msg: 'Doctor no encontrado' });
+            }
+            
+            // Verificar que el paciente pertenezca a este doctor
+            if (pacienteActual.doctor_id !== doctores[0].id) {
+                return res.status(403).json({ msg: 'No tienes permiso para modificar este paciente' });
+            }
+        } else if (req.usuario.rol !== 'admin' && req.usuario.rol !== 'superadmin' && req.usuario.rol !== 'recepcion') {
+            // Si no es doctor, admin, superadmin o recepción, denegar acceso
+            return res.status(403).json({ msg: 'No tienes permiso para modificar este paciente' });
+        }
+        
+        // 7. Iniciar transacción
+        await connection.beginTransaction();
+        
+        try {
+            // 8. Actualizar datos del paciente
+            if (nombre_mascota || fecha_nacimiento || peso || id_raza || foto_url) {
+                // Validar peso si fue proporcionado
+                let pesoValidado = pacienteActual.peso;
+                if (peso) {
+                    pesoValidado = parseFloat(peso);
+                    if (isNaN(pesoValidado) || pesoValidado <= 0) {
+                        throw new Error('El peso debe ser mayor a 0');
+                    }
+                }
+                
+                // Validar raza si fue proporcionada
+                if (id_raza) {
+                    const [razas] = await connection.execute(
+                        'SELECT id FROM razas WHERE id = ? AND activo = TRUE',
+                        [id_raza]
+                    );
+                    
+                    if (razas.length === 0) {
+                        throw new Error('Raza no válida');
+                    }
+                }
+                
+                // Actualizar datos del paciente
+                await connection.execute(
+                    `UPDATE pacientes 
+                     SET nombre_mascota = ?, 
+                         fecha_nacimiento = ?, 
+                         peso = ?, 
+                         id_raza = ?, 
+                         foto_url = ?,
+                         updated_at = NOW()
+                     WHERE id = ?`,
+                    [
+                        nombre_mascota || pacienteActual.nombre_mascota,
+                        fecha_nacimiento || pacienteActual.fecha_nacimiento,
+                        pesoValidado,
+                        id_raza || pacienteActual.id_raza,
+                        foto_url || pacienteActual.foto_url,
+                        pacienteId
+                    ]
+                );
+            }
+            
+            // 9. Actualizar datos del propietario si se proporcionaron
+            if (nombre_propietario || apellidos_propietario || email) {
+                // Validar email si fue proporcionado
+                if (email) {
+                    const emailLimpio = email.trim().toLowerCase();
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    if (!emailRegex.test(emailLimpio)) {
+                        throw new Error('Email no válido');
+                    }
+                }
+                
+                // Actualizar datos del propietario
+                await connection.execute(
+                    `UPDATE propietarios 
+                     SET nombre = ?, 
+                         apellidos = ?, 
+                         email = ?,
+                         updated_at = NOW()
+                     WHERE id = ?`,
+                    [
+                        nombre_propietario || pacienteActual.nombre_propietario,
+                        apellidos_propietario || pacienteActual.apellidos_propietario,
+                        email ? email.trim().toLowerCase() : pacienteActual.email,
+                        pacienteActual.propietario_id
+                    ]
+                );
+            }
+            
+            // 10. Actualizar teléfono si se proporcionó
+            if (telefono && tipo_telefono) {
+                const telefonoLimpio = telefono.trim().replace(/\D/g, '');
+                
+                // Validar longitud del teléfono
+                if (telefonoLimpio.length < 10) {
+                    throw new Error('Número de teléfono inválido');
+                }
+                
+                // Actualizar o crear teléfono
+                const [telefonos] = await connection.execute(
+                    `SELECT id FROM telefonos 
+                     WHERE id_propietario = ? AND principal = TRUE`,
+                    [pacienteActual.propietario_id]
+                );
+                
+                if (telefonos.length > 0) {
+                    // Actualizar teléfono existente
+                    await connection.execute(
+                        `UPDATE telefonos 
+                         SET numero = ?, 
+                             tipo = ? 
+                         WHERE id = ?`,
+                        [telefonoLimpio, tipo_telefono, telefonos[0].id]
+                    );
+                } else {
+                    // Crear nuevo teléfono
+                    await connection.execute(
+                        `INSERT INTO telefonos (id_propietario, tipo, numero, principal)
+                         VALUES (?, ?, ?, TRUE)`,
+                        [pacienteActual.propietario_id, tipo_telefono, telefonoLimpio]
+                    );
+                }
+            }
+            
+            // 11. Actualizar dirección si se proporcionaron datos
+            if (calle || numero_ext || numero_int || codigo_postal || colonia || id_municipio) {
+                // Verificar si ya existe dirección
+                const [direcciones] = await connection.execute(
+                    `SELECT d.id, d.id_codigo_postal 
+                     FROM direcciones d
+                     WHERE d.id_propietario = ? AND d.tipo = 'casa'`,
+                    [pacienteActual.propietario_id]
+                );
+                
+                // Si hay cambio en código postal o colonia, verificar que exista
+                let id_codigo_postal = null;
+                if (codigo_postal && colonia && id_municipio) {
+                    const [codigos] = await connection.execute(
+                        `SELECT id FROM codigo_postal 
+                         WHERE codigo = ? AND colonia = ? AND id_municipio = ?`,
+                        [codigo_postal, colonia, id_municipio]
+                    );
+                    
+                    if (codigos.length > 0) {
+                        id_codigo_postal = codigos[0].id;
+                    } else {
+                        throw new Error('Código postal o colonia no válidos');
+                    }
+                }
+                
+                // Actualizar o crear dirección
+                if (direcciones.length > 0) {
+                    // Actualizar dirección existente
+                    await connection.execute(
+                        `UPDATE direcciones 
+                         SET calle = ?, 
+                             numero_ext = ?, 
+                             numero_int = ?, 
+                             id_codigo_postal = ?
+                         WHERE id = ?`,
+                        [
+                            calle || null,
+                            numero_ext || null,
+                            numero_int || null,
+                            id_codigo_postal || direcciones[0].id_codigo_postal,
+                            direcciones[0].id
+                        ]
+                    );
+                } else if (calle && numero_ext && id_codigo_postal) {
+                    // Crear nueva dirección si se proporcionaron datos mínimos
+                    await connection.execute(
+                        `INSERT INTO direcciones (id_propietario, tipo, calle, numero_ext, numero_int, id_codigo_postal)
+                         VALUES (?, 'casa', ?, ?, ?, ?)`,
+                        [pacienteActual.propietario_id, calle, numero_ext, numero_int || null, id_codigo_postal]
+                    );
+                }
+            }
+            
+            // 12. Registrar la actualización en audit_logs
+            await connection.execute(
+                `INSERT INTO audit_logs (tabla, id_registro, id_usuario, accion, datos_nuevos)
+                 VALUES ('pacientes', ?, ?, 'modificar', ?)`,
+                [pacienteId, req.usuario.id, JSON.stringify(req.body)]
+            );
+            
+            // 13. Confirmar la transacción
+            await connection.commit();
+            
+            // 14. Obtener datos actualizados para devolver
+            const [pacienteActualizado] = await connection.execute(
+                `SELECT p.*, r.nombre AS nombre_raza, e.nombre AS especie,
+                        pr.nombre AS nombre_propietario, pr.apellidos AS apellidos_propietario,
+                        pr.email
+                 FROM pacientes p
+                 INNER JOIN razas r ON p.id_raza = r.id
+                 INNER JOIN especies e ON r.id_especie = e.id
+                 INNER JOIN propietarios pr ON p.id_propietario = pr.id
+                 WHERE p.id = ?`,
+                [pacienteId]
+            );
+            
+            // 15. Respuesta exitosa
+            res.json({
+                msg: 'Paciente actualizado correctamente',
+                paciente: pacienteActualizado[0]
+            });
+            
+        } catch (error) {
+            // 16. Rollback en caso de error
+            await connection.rollback();
+            throw error;
+        }
+        
+    } catch (error) {
+        console.error('Error en actualizarPaciente:', error);
+        res.status(error.message === 'El peso debe ser mayor a 0' || 
+                  error.message === 'Raza no válida' || 
+                  error.message === 'Email no válido' ||
+                  error.message === 'Número de teléfono inválido' ||
+                  error.message === 'Código postal o colonia no válidos'
+                  ? 400 : 500)
+           .json({ msg: error.message || 'Error al actualizar el paciente' });
+    } finally {
+        if (connection) {
+            try {
+                await connection.end();
+            } catch (error) {
+                console.error('Error al cerrar conexión:', error);
+            }
+        }
+    }
 };
 
 
+/**
+ * Elimina un paciente del sistema
+ * Verifica permisos del usuario y mantiene integridad referencial
+ */
 const eliminarPaciente = async (req, res) => {
-      
+    let connection;
+    try {
+        // 1. Extraer ID del paciente de los parámetros
+        const { id } = req.params;
+        
+        // 2. Validar que el ID sea un número válido
+        const pacienteId = parseInt(id);
+        if (isNaN(pacienteId) || pacienteId <= 0) {
+            return res.status(400).json({ msg: 'ID de paciente no válido' });
+        }
+        
+        // 3. Establecer conexión a la BD
+        connection = await conectarDB();
+        
+        // 4. Obtener información del paciente para verificar existencia y permisos
+        const [pacientes] = await connection.execute(
+            `SELECT p.*, d.id AS doctor_id, u.id AS doctor_usuario_id
+             FROM pacientes p
+             INNER JOIN doctores d ON p.id_doctor = d.id
+             INNER JOIN usuarios u ON d.id_usuario = u.id
+             WHERE p.id = ?`,
+            [pacienteId]
+        );
+        
+        // 5. Verificar si el paciente existe
+        if (pacientes.length === 0) {
+            return res.status(404).json({ msg: 'Paciente no encontrado' });
+        }
+        
+        const paciente = pacientes[0];
+        
+        // 6. Validar permisos según el rol del usuario
+        if (req.usuario.rol === 'doctor') {
+            // Obtener el ID del doctor del usuario autenticado
+            const [doctores] = await connection.execute(
+                `SELECT id FROM doctores WHERE id_usuario = ?`,
+                [req.usuario.id]
+            );
+            
+            if (doctores.length === 0) {
+                return res.status(403).json({ msg: 'Doctor no encontrado' });
+            }
+            
+            // Verificar que el paciente pertenezca a este doctor
+            if (paciente.doctor_id !== doctores[0].id) {
+                return res.status(403).json({ msg: 'No tienes permiso para eliminar este paciente' });
+            }
+        } else if (req.usuario.rol !== 'admin' && req.usuario.rol !== 'superadmin') {
+            // Solo doctores, admin y superadmin pueden eliminar pacientes
+            // Recepción no tiene este permiso
+            return res.status(403).json({ msg: 'No tienes permiso para eliminar pacientes' });
+        }
+        
+        // 7. Iniciar transacción para mantener integridad
+        await connection.beginTransaction();
+        
+        try {
+            // 8. Registrar eliminación en audit_logs antes de eliminar para tener referencia
+            await connection.execute(
+                `INSERT INTO audit_logs (
+                    tabla, id_registro, id_usuario, 
+                    accion, datos_antiguos
+                ) VALUES ('pacientes', ?, ?, 'eliminar', ?)`,
+                [
+                    pacienteId,
+                    req.usuario.id,
+                    JSON.stringify(paciente)
+                ]
+            );
+            
+            // 9. Verificar si hay historias clínicas, vacunas, etc. asociadas
+            const [historias] = await connection.execute(
+                'SELECT COUNT(*) AS total FROM historias_clinicas WHERE id_paciente = ?',
+                [pacienteId]
+            );
+            
+            const [vacunas] = await connection.execute(
+                'SELECT COUNT(*) AS total FROM vacunas WHERE id_paciente = ?',
+                [pacienteId]
+            );
+            
+            const [desparasitaciones] = await connection.execute(
+                'SELECT COUNT(*) AS total FROM desparasitaciones WHERE id_paciente = ?',
+                [pacienteId]
+            );
+            
+            // 10. Si hay registros asociados, realizar borrado lógico 
+            // (más seguro que borrar físicamente)
+            if (historias[0].total > 0 || vacunas[0].total > 0 || desparasitaciones[0].total > 0) {
+                await connection.execute(
+                    `UPDATE pacientes 
+                     SET estado = 'inactivo', 
+                         updated_at = NOW() 
+                     WHERE id = ?`,
+                    [pacienteId]
+                );
+                
+                await connection.commit();
+                return res.json({ 
+                    msg: 'Paciente marcado como inactivo porque tiene historias clínicas o tratamientos asociados',
+                    borradoLogico: true
+                });
+            }
+            
+            // 11. Si no hay registros asociados, eliminar físicamente
+            // Eliminar citas asociadas si existen
+            await connection.execute(
+                'DELETE FROM citas WHERE id_paciente = ?',
+                [pacienteId]
+            );
+            
+            // Eliminar paciente
+            await connection.execute(
+                'DELETE FROM pacientes WHERE id = ?',
+                [pacienteId]
+            );
+            
+            // 12. Confirmar la transacción
+            await connection.commit();
+            
+            // 13. Respuesta exitosa
+            res.json({ msg: 'Paciente eliminado correctamente' });
+            
+        } catch (error) {
+            // 14. Rollback en caso de error
+            await connection.rollback();
+            throw error;
+        }
+        
+    } catch (error) {
+        console.error('Error en eliminarPaciente:', error);
+        res.status(500).json({ msg: 'Error al eliminar el paciente' });
+    } finally {
+        if (connection) {
+            try {
+                await connection.end();
+            } catch (error) {
+                console.error('Error al cerrar conexión:', error);
+            }
+        }
+    }
 };
 
 export{
