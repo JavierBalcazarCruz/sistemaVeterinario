@@ -1,0 +1,267 @@
+.cambiar-password-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-image: url('https://r4.wallpaperflare.com/wallpaper/418/103/593/puppies-dog-golden-retrievers-animals-wallpaper-69b0a81de1aacdabc62768ffa0e1d62d.jpg');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    font-family: 'Poppins', sans-serif;
+    padding: 20px;
+  }
+  
+  .password-card {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 40px;
+    width: 100%;
+    max-width: 500px;
+    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: white;
+    transition: all 0.3s ease;
+    position: relative;
+  }
+  
+  .password-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 40px rgba(31, 38, 135, 0.5);
+  }
+  
+  .iconos-superiores {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  .icono-home, .icono-editar {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: #ff7600;
+  }
+  
+  .icono-home:hover, .icono-editar:hover {
+    transform: scale(1.1);
+  }
+  
+  .password-card h1 {
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 2rem;
+    color: #ffffff;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+  }
+  
+  .avatar {
+    width: 120px;
+    height: 120px;
+    border-radius: 60px;
+    overflow: hidden;
+    margin: 0 auto 30px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    transition: all 0.3s ease;
+  }
+  
+  .avatar:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+  }
+  
+  .avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  .campo-password {
+    margin-bottom: 20px;
+  }
+  
+  .campo-password label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.8);
+  }
+  
+  .input-password {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 10px;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+  }
+  
+  .input-password:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  
+  .input-edicion {
+    flex-grow: 1;
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: white;
+    font-size: 1rem;
+    width: 100%;
+    outline: none;
+  }
+  
+  .input-password svg {
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .input-password svg:hover {
+    transform: scale(1.1);
+  }
+  
+  .botones-accion {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 30px;
+  }
+  
+  .btn-accion {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    cursor: pointer;
+    color: white;
+    transition: all 0.3s ease;
+    padding: 12px 24px;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  .btn-accion svg {
+    transition: all 0.3s ease;
+  }
+  
+  .btn-guardar {
+    background: rgba(100, 255, 218, 0.2);
+  }
+  
+  .btn-cancelar {
+    background: rgba(255, 100, 100, 0.2);
+  }
+  
+  .btn-accion:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+  }
+  
+  .btn-guardar:hover {
+    background: rgba(100, 255, 218, 0.3);
+  }
+  
+  .btn-cancelar:hover {
+    background: rgba(255, 100, 100, 0.3);
+  }
+  
+  .btn-accion:hover svg {
+    transform: scale(1.1);
+  }
+  
+  .btn-accion:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .instrucciones {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.8);
+    font-style: italic;
+  }
+  
+  @keyframes suaveFadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .campo-password {
+    animation: suaveFadeIn 0.5s ease-out;
+  }
+  
+  @media (max-width: 600px) {
+    .password-card {
+      padding: 20px;
+    }
+  
+    .avatar {
+      width: 100px;
+      height: 100px;
+    }
+  
+    .password-card h1 {
+      font-size: 1.5rem;
+    }
+  
+    .botones-accion {
+      flex-direction: column;
+      gap: 10px;
+    }
+  
+    .btn-accion {
+      width: 100%;
+    }
+  }
+  .instrucciones {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.8);
+    font-style: italic;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    opacity: 1;
+    transform: translateY(0);
+  }
+  
+  .instrucciones.oculto {
+    opacity: 0;
+    transform: translateY(-20px);
+    pointer-events: none;
+  }
+  
+  .formulario-edicion {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 0.5s cubic-bezier(0.25, 0.1, 0.25, 1), opacity 0.5s ease;
+  }
+  
+  .formulario-edicion.visible {
+    max-height: 1000px; /* Ajusta este valor según sea necesario */
+    opacity: 1;
+  }
+  
+  .campo-password, .botones-accion {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  
+  .formulario-edicion.visible .campo-password,
+  .formulario-edicion.visible .botones-accion {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  
+  .formulario-edicion.visible .campo-password:nth-child(1) { transition-delay: 0.1s; }
+  .formulario-edicion.visible .campo-password:nth-child(2) { transition-delay: 0.2s; }
+  .formulario-edicion.visible .campo-password:nth-child(3) { transition-delay: 0.3s; }
+  .formulario-edicion.visible .botones-accion { transition-delay: 0.4s; }
