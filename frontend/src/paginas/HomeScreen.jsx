@@ -19,10 +19,15 @@ import TopMenu  from '../components/TopMenu';
 const HomeScreen = () => {
   const { cerrarSesion, auth } = useAuth();
   const [saludo, setSaludo] = useState('');
-  
+  const [isAnimating, setIsAnimating] = useState(true);
+
   useEffect(() => {
     // Agregar la clase al body cuando el componente se monte
     document.body.classList.add('home-screen-body');
+    setTimeout(() => {
+      setIsAnimating(false);
+    }, 2000);
+    
     return () => {
       // Eliminar la clase del body cuando el componente se desmonte
       document.body.classList.remove('home-screen-body');
@@ -42,9 +47,11 @@ const HomeScreen = () => {
   }, []);
 
   return (
-    <div className="contain">
-       <TopMenu />
-      <header>
+    <div className={`contain ${isAnimating ? 'animate-in' : ''}`}>
+        <div className={isAnimating ? 'top-menu animate-in' : 'top-menu'}>
+        <TopMenu />
+      </div>
+      <header className={isAnimating ? 'animate-in' : ''}>
         <div className="logo-contain">
           <img src={logo} alt="Logo" className="logo" />
         </div>
