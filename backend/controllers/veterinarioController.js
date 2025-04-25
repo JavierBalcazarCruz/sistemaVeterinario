@@ -1,6 +1,7 @@
 import conectarDB from '../config/db.js';
 import generarId from '../helpers/generarId.js';
 import generarJWT from '../helpers/generarJWT.js';
+import emailRegistro from "../helpers/emailRegistro.js";
 import bcrypt from 'bcrypt';
 
 
@@ -112,8 +113,15 @@ const registrar = async (req, res) => {
             ) VALUES (?, 'verification', ?, DATE_ADD(NOW(), INTERVAL ? HOUR))`,
             [idUsuario, token, HORAS_EXPIRACION]
         );
+
+        // 10 Enviar email de registro
+        await emailRegistro({
+            email: emailLimpio,
+            nombre: nombreLimpio,
+            token: token
+        });
  
-        // 10. Respuesta al cliente
+        // 11. Respuesta al cliente
         res.json({
             msg: 'Usuario registrado correctamente. Revisa tu email para verificar tu cuenta.',
             id: idUsuario,
