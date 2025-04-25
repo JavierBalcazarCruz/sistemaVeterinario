@@ -2,6 +2,7 @@ import conectarDB from '../config/db.js';
 import generarId from '../helpers/generarId.js';
 import generarJWT from '../helpers/generarJWT.js';
 import emailRegistro from "../helpers/emailRegistro.js";
+import emailOlvidePassword from "../helpers/emailOlvidePassword.js";
 import bcrypt from 'bcrypt';
 
 
@@ -434,13 +435,12 @@ const olvidePassword = async (req, res) => {
         );
  
         // Enviar email
-        /*
         await emailOlvidePassword({
             email: usuario.email,
             nombre: usuario.nombre,
-            token
+            token: token
         });
- */
+
         res.json({ msg: 'Se ha enviado un correo electrónico con las instrucciones' });
  
     } catch (error) {
