@@ -20,7 +20,6 @@ const Registrar = () => {
   const [password, setPassword] = useState('');
   const [repetirPassword, setRepetirPassword] = useState('');
   const [rol, setRol] = useState('doctor');
-  const [id_licencia_clinica, setIdLicenciaClinica] = useState('');
 
   const mostrarAlerta = (titulo, texto, rutaImg, altImg) => {
     Swal.fire({
@@ -34,7 +33,7 @@ const Registrar = () => {
   const handleSubmit = async e => {
     e.preventDefault();
 
-    if ([nombre, apellidos, email, password, repetirPassword, id_licencia_clinica].includes('')) {
+    if ([nombre, apellidos, email, password, repetirPassword].includes('')) {
       mostrarAlerta("⚠️ Los campos se encuentran vacios ⚠️", "Alguno de los campos se encuentran vacios revisa la información que  ingresaste.", cVacios, "Perrito triste por que no  hay campos llenos");
       return;
     }
@@ -53,8 +52,7 @@ const Registrar = () => {
         apellidos,
         email,
         password,
-        rol,
-        id_licencia_clinica: parseInt(id_licencia_clinica)
+        rol
       });
       console.log(respuesta)
       mostrarAlerta("Registrado correctamente", "Revisa tu email y confirma tu registro.", rExistoso, "Perrito sonriendo");
@@ -121,10 +119,7 @@ const Registrar = () => {
                 <option value="recepcion">Recepción</option>
               </select>
             </div>
-            <div className="input-field">
-              <i className="fas fa-id-card"></i>
-              <input type="number" placeholder="ID Licencia Clínica" value={id_licencia_clinica} onChange={e => setIdLicenciaClinica(e.target.value)} />
-            </div>
+           
             <input type="submit" className="btn" value="Crear Cuenta" />
           </form>
         </div>

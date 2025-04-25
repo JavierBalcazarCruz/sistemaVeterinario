@@ -5,6 +5,7 @@ import bcrypt from 'bcrypt';
 
 
 /*Registrar doctor*/
+/*Registrar doctor*/
 const registrar = async (req, res) => {
     let connection;
     
@@ -15,8 +16,7 @@ const registrar = async (req, res) => {
             nombre = '', 
             apellidos = '', 
             password, // Cambiado de password_hash a password
-            rol, 
-            id_licencia_clinica 
+            rol
         } = req.body;
  
         // 2. Limpieza de datos
@@ -63,14 +63,17 @@ const registrar = async (req, res) => {
             return res.status(400).json({ msg: 'El email ya está registrado' });
         }
  
-        // 7. Verificación de licencia válida
+        // 7. Asignación de licencia gratuita por defecto
+        const id_licencia_clinica = 11; // ID de la licencia gratuita
+        
+        // 7.1 Verificación de que la licencia gratuita existe y está activa
         const [licenciaExiste] = await connection.execute(
-            'SELECT id FROM licencias_clinica WHERE id = ? AND status = "activa"',
+            'SELECT id FROM licencias_clinica WHERE id = ? AND status IN ("free", "activa")',
             [id_licencia_clinica]
         );
  
         if (licenciaExiste.length === 0) {
-            return res.status(400).json({ msg: 'La licencia no existe o no está activa' });
+            return res.status(400).json({ msg: 'La licencia gratuita no está disponible' });
         }
  
         // 8. Inserción del usuario con password hasheado
@@ -289,10 +292,10 @@ const autenticar = async (req, res) => {
             });
         }
  
-        // Verificar licencia activa
+        // Verificar licencia activa o free
         const [licencia] = await connection.execute(
             `SELECT status FROM licencias_clinica 
-             WHERE id = ? AND status = 'activa'`,
+            WHERE id = ? AND status IN ('activa', 'free')`,
             [usuario.id_licencia_clinica]
         );
  
