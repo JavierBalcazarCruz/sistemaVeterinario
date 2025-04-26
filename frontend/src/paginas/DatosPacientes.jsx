@@ -15,6 +15,7 @@ const DatosPacientes = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isAnimating, setIsAnimating] = useState(true);
 
   const formatearFecha = (fecha) => {
     if (!fecha) return 'No disponible';
@@ -54,6 +55,47 @@ const DatosPacientes = () => {
     setContacts(contactosTransformados);
   }, [pacientes]);
 
+  // Nuevo useEffect para manejar las animaciones
+  useEffect(() => {
+    // Iniciar la animación al montar el componente
+    setIsAnimating(true);
+    
+    // Finalizar la animación después de un tiempo
+    const timer = setTimeout(() => {
+      setIsAnimating(false);
+    }, 2500); // Aumentamos el tiempo para asegurar que todas las animaciones terminen
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Definimos filteredContacts antes de usarlo
+  const filteredContacts = contacts.filter(contact => {
+    const searchLower = searchTerm.toLowerCase();
+    const nombreMascota = contact.nombreMascota || '';
+    const propietario = contact.propietario || '';
+    const raza = contact.raza || '';
+    const especie = contact.especie || '';
+    
+    return nombreMascota.toLowerCase().includes(searchLower) ||
+           propietario.toLowerCase().includes(searchLower) ||
+           raza.toLowerCase().includes(searchLower) ||
+           especie.toLowerCase().includes(searchLower);
+  });
+
+
+
+  // Animar los widgets solo cuando se selecciona un contacto por primera vez
+  useEffect(() => {
+    if (selectedContact && isAnimating) {
+      const widgetts = document.querySelectorAll('.widgett');
+      widgetts.forEach((widgett, index) => {
+        setTimeout(() => {
+          widgett.classList.add('animate-in');
+        }, index * 200);
+      });
+    }
+  }, [selectedContact, isAnimating]);
+
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 1024);
@@ -83,19 +125,6 @@ const DatosPacientes = () => {
       setIsMenuOpen(false);
     }
   };
-
-  const filteredContacts = contacts.filter(contact => {
-    const searchLower = searchTerm.toLowerCase();
-    const nombreMascota = contact.nombreMascota || '';
-    const propietario = contact.propietario || '';
-    const raza = contact.raza || '';
-    const especie = contact.especie || '';
-    
-    return nombreMascota.toLowerCase().includes(searchLower) ||
-           propietario.toLowerCase().includes(searchLower) ||
-           raza.toLowerCase().includes(searchLower) ||
-           especie.toLowerCase().includes(searchLower);
-  });
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingType, setEditingType] = useState(null);
@@ -467,15 +496,15 @@ const DatosPacientes = () => {
 
   return (
     <div className={`full-height-container background-cover ${isEditModalOpen ? 'blur-background' : ''}`}>
-      <div className="veterinary-contacts">
+      <div className={`veterinary-contacts ${isAnimating ? 'animate-in' : ''}`}>
         {isMobile && (
           <button className="menu-button" onClick={toggleMenu}>
             {isMenuOpen ? <X size={18} /> : <Menu size={24} />}
           </button>
         )}
-        <div className={`contacts-list ${isMobile && isMenuOpen ? 'open' : ''}`}>
+        <div className={`contacts-list ${isMobile && isMenuOpen ? 'open' : ''} ${isAnimating && !isMobile ? 'animate-in' : ''}`}>
           <div className="contacts-header">
-            <button to="/admin" className="back-button" onClick={() => navigate('/admin')}>
+            <button className={`back-button ${isAnimating ? '' : 'animate-in'}`} onClick={() => navigate('/admin')}>
               <ArrowLeft size={24} />
             </button>
             <h2 className='titPacientes'>Pacientes</h2>
@@ -486,7 +515,7 @@ const DatosPacientes = () => {
           <input
             type="text"
             placeholder="Buscar paciente"
-            className="search-input"
+            className={`search-input ${isAnimating ? '' : 'animate-in'}`}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -521,7 +550,7 @@ const DatosPacientes = () => {
             </div>
           ))}
         </div>
-        <div className={`contact-details ${selectedContact ? 'open' : ''}`}>
+        <div className={`contact-details ${selectedContact ? 'open' : ''} ${isAnimating ? 'animate-in' : ''}`}>
           {selectedContact ? (
             <>
               <div className="contact-header">
@@ -538,71 +567,74 @@ const DatosPacientes = () => {
                 <h2>{selectedContact.nombreMascota}</h2>
               </div>
               <div className="contact-info-details">
-                <div className="widgets">
-                  <div className="widget">
-                    <div className="widget-header">
+                <div className="widgetts">
+                  <div className={`widgett ${isAnimating ? '' : 'animate-in'}`}>
+                    <div className="widgett-header">
                       <h2 className='tit-datosPacientes'>Información del Dueño</h2>
                       <Edit size={20} className="edit-icon" onClick={() => openEditModal('owner')} />
                     </div>
-                    <div className="info-item">
-                      <User size={20} />
-                      <span><strong>Dueño:</strong> {selectedContact.propietario}</span>
+                    <div className="widgett-content">
+                      <div className="info-item">
+                        <User size={20} />
+                        <span><strong>Dueño:</strong> {selectedContact.propietario}</span>
+                      </div>
+                      <div className="info-item">
+                        <Phone size={20} />
+                        <span><strong>Celular:</strong> {selectedContact.celular}</span>
+                      </div>
+                      <div className="info-item">
+                        <Phone size={20} />
+                        <span><strong>Teléfono de casa:</strong> {selectedContact.telefonoCasa}</span>
+                      </div>
+                      <div className="info-item">
+                        <Mail size={20} />
+                        <span><strong>Email:</strong> {selectedContact.email}</span>
+                      </div>  
                     </div>
-                    <div className="info-item">
-                      <Phone size={20} />
-                      <span><strong>Celular:</strong> {selectedContact.celular}</span>
+                    <div className="widgett-footer">
+                      <p>ver mas</p>
                     </div>
-                    <div className="info-item">
-                      <Phone size={20} />
-                      <span><strong>Teléfono de casa:</strong> {selectedContact.telefonoCasa}</span>
-                    </div>
-                    <div className="info-item">
-                      <Mail size={20} />
-                      <span><strong>Email:</strong> {selectedContact.email}</span>
-                    </div>  
-                    <div className="info-item">
-                      <MapPin size={20} />
-                      <span><strong>Dirección:</strong> {selectedContact.direccion}</span>         
-                    </div>
-                    <div className="info-item">
-                      <MapPin size={20} />
-                      <span><strong>Estado:</strong> {selectedContact.estado}</span>
-                    </div>
-                    <div className="info-item">
-                      <MapPin size={20} />
-                      <span><strong>Colonia:</strong> {selectedContact.colonia}</span>
-                    </div>    
-                    <br />                   
                   </div>
-                  <div className="widget">
-                    <div className="widget-header">
+                  
+                  <div className={`widgett ${isAnimating ? '' : 'animate-in'}`}>
+                    <div className="widgett-header">
                       <h2 className='tit-datosPacientes'>Información de la mascota</h2>
                       <Edit size={20} className="edit-icon" onClick={() => openEditModal('pet')} />
                     </div>
-                    <div className="info-item">
-                      <PawPrint size={20} />
-                      <span><strong>Nombre:</strong> {selectedContact.nombreMascota}</span>
+                    <div className="widgett-content">
+                      <div className="info-item">
+                        <PawPrint size={20} />
+                        <span><strong>Nombre:</strong> {selectedContact.nombreMascota}</span>
+                      </div>
+                      <div className="info-item">
+                        <Stethoscope size={20} />
+                        <span><strong>Especie:</strong> {selectedContact.especie}</span>
+                      </div>
+                      <div className="info-item">
+                        <Calendar size={20} />
+                        <span><strong>Fecha de nacimiento:</strong> {formatearFecha(selectedContact.fechaNacimiento)}</span>
+                      </div>
+                      <div className="info-item">
+                        <PawPrint size={20} />
+                        <span><strong>Raza:</strong> {selectedContact.raza}</span>
+                      </div>
                     </div>
-                    <div className="info-item">
-                      <Stethoscope size={20} />
-                      <span><strong>Especie:</strong> {selectedContact.especie}</span>
+                    <div className="widgett-footer">
+                      <p>ver mas</p>
                     </div>
-                    <div className="info-item">
-                      <Calendar size={20} />
-                      <span><strong>Fecha de nacimiento:</strong> {formatearFecha(selectedContact.fechaNacimiento)}</span>
-                    </div>
-                    <div className="info-item">
-                      <PawPrint size={20} />
-                      <span><strong>Raza:</strong> {selectedContact.raza}</span>
-                    </div>
-                    <div className="info-item">
-                      <Weight size={20} />
-                      <span><strong>Peso:</strong> {selectedContact.peso} kg</span>
-                    </div>  
-                    <br />
                   </div>
-                  <div className="widget">
-                    <h2 className='tit-datosPacientes'>Información reciente de la mascota</h2>
+                  
+                  <div className={`widgett ${isAnimating ? '' : 'animate-in'}`}>
+                    <div className="widgett-header">
+                      <h2 className='tit-datosPacientes'>Información reciente de la mascota</h2>
+                    </div>
+                    <div className="widgett-content">
+                      {/* Aquí iría el contenido de información reciente */}
+                      <p>No hay información reciente disponible</p>
+                    </div>
+                    <div className="widgett-footer">
+                      <p>ver mas</p>
+                    </div>
                   </div>        
                 </div>
               </div>
