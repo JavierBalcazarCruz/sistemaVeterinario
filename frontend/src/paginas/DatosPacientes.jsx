@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { Menu, X, Phone, Mail, MapPin, User, Plus, Stethoscope, PawPrint, Calendar, Weight , Edit, EllipsisVertical,ArrowLeft  } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import "../assets/datosPacientes/styles/style.css";
-import '../assets/homeScreen/styles/style.css';
+
 import usePacientes from "../hooks/usePacientes";
 import Swal from "sweetalert2";
 import cVacios from "../assets/registrarPaciente/images/CamposVacios.png";
 import registroOk from "../assets/registrarPaciente/images/pacienteRegistrado.jpg";
+
 const DatosPacientes = () => {
-  const { pacientes, guardarPaciente,eliminarPacientes } = usePacientes();
+  const { pacientes, guardarPaciente, eliminarPacientes } = usePacientes();
   const [contacts, setContacts] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -31,7 +32,26 @@ const DatosPacientes = () => {
   const navigate = useNavigate();
   
   useEffect(() => {
-    setContacts(pacientes);
+    // Transformar los datos recibidos del backend MySQL
+    const contactosTransformados = pacientes.map(paciente => ({
+      id: paciente.id, // Cambiar de _id a id
+      nombreMascota: paciente.nombre_mascota,
+      propietario: `${paciente.nombre_propietario} ${paciente.apellidos_propietario}`,
+      especie: paciente.especie,
+      raza: paciente.nombre_raza, // Cambio para usar nombre_raza que viene del JOIN
+      fechaNacimiento: paciente.fecha_nacimiento,
+      peso: paciente.peso,
+      // Valores por defecto para campos que no existen en la nueva estructura
+      email: '', // Será llenado más adelante
+      celular: '', 
+      telefonoCasa: '',
+      direccion: '',
+      colonia: '',
+      estado: '',
+      color: '', // Este campo no existe en la nueva estructura
+      edad: '' // Este campo no existe en la nueva estructura
+    }));
+    setContacts(contactosTransformados);
   }, [pacientes]);
 
   useEffect(() => {
@@ -64,12 +84,18 @@ const DatosPacientes = () => {
     }
   };
 
-  const filteredContacts = contacts.filter(contact =>
-    contact.nombreMascota.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contact.propietario.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contact.raza.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contact.color.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredContacts = contacts.filter(contact => {
+    const searchLower = searchTerm.toLowerCase();
+    const nombreMascota = contact.nombreMascota || '';
+    const propietario = contact.propietario || '';
+    const raza = contact.raza || '';
+    const especie = contact.especie || '';
+    
+    return nombreMascota.toLowerCase().includes(searchLower) ||
+           propietario.toLowerCase().includes(searchLower) ||
+           raza.toLowerCase().includes(searchLower) ||
+           especie.toLowerCase().includes(searchLower);
+  });
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingType, setEditingType] = useState(null);
@@ -98,67 +124,84 @@ const DatosPacientes = () => {
       imageAlt: altImg,
     });
   };
-const mostrarAlertaEliminar = (titulo, texto, rutaImg, altImg, onConfirm) => {
-  Swal.fire({
-    title: titulo,
-    text: texto,
-    imageUrl: rutaImg,
-    imageAlt: altImg,
-    showCancelButton: true,
-    confirmButtonColor: '#3085d6',
-    cancelButtonColor: '#d33',
-    confirmButtonText: 'Sí, eliminar',
-    cancelButtonText: 'Cancelar',
-  
-   
-  
-  }).then((result) => {
-    if (result.isConfirmed) {
-      onConfirm();
-    }
-  });
-};
-const handleEllipsisClick = (e, contact) => {
-  e.stopPropagation();
-  mostrarAlertaEliminar(
-    "⚠️ ¿Estás seguro de eliminar este registro? ⚠️",
-    `¿Deseas eliminar el registro de ${contact.nombreMascota}?`,
-    cVacios,
-    "Gato observándote porque estás a punto de eliminar un registro",
-    () => {
-      eliminarPacientes(contact._id);
-      // Actualiza el estado local después de eliminar
-      setContacts(prevContacts => prevContacts.filter(c => c._id !== contact._id));
-      if (selectedContact && selectedContact._id === contact._id) {
-        setSelectedContact(null);
+
+  const mostrarAlertaEliminar = (titulo, texto, rutaImg, altImg, onConfirm) => {
+    Swal.fire({
+      title: titulo,
+      text: texto,
+      imageUrl: rutaImg,
+      imageAlt: altImg,
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+    }).then((result) => {
+      if (result.isConfirmed) {
+        onConfirm();
       }
-      Swal.fire(
-        '¡Paciente eliminado!',
-        'El registro ha sido eliminado exitosamente',
-        'success'
-      );
-    }
-  );
-};
+    });
+  };
+
+  const handleEllipsisClick = (e, contact) => {
+    e.stopPropagation();
+    mostrarAlertaEliminar(
+      "⚠️ ¿Estás seguro de eliminar este registro? ⚠️",
+      `¿Deseas eliminar el registro de ${contact.nombreMascota}?`,
+      cVacios,
+      "Gato observándote porque estás a punto de eliminar un registro",
+      () => {
+        eliminarPacientes(contact.id);
+        // Actualiza el estado local después de eliminar
+        setContacts(prevContacts => prevContacts.filter(c => c.id !== contact.id));
+        if (selectedContact && selectedContact.id === contact.id) {
+          setSelectedContact(null);
+        }
+        Swal.fire(
+          '¡Paciente eliminado!',
+          'El registro ha sido eliminado exitosamente',
+          'success'
+        );
+      }
+    );
+  };
 
   const handleSubmit = (e, updatedData) => {
     e.preventDefault();
-    const { _id, propietario, celular, telefonoCasa, email, colonia, color, direccion, edad, especie, estado, fechaNacimiento, nombreMascota, peso, raza } = updatedData;
-    if (
-      [
-        _id, propietario, celular, telefonoCasa, email, colonia, color, direccion, edad, especie, estado, fechaNacimiento, nombreMascota, peso, raza
-      ].includes("")
-    ) {
+    const { id, propietario, celular, telefonoCasa, email, colonia, direccion, estado, fechaNacimiento, nombreMascota, peso, raza } = updatedData;
+    
+    // Preparar datos para enviar al backend MySQL
+    const pacienteData = {
+      id,
+      nombre_mascota: nombreMascota,
+      fecha_nacimiento: fechaNacimiento,
+      peso,
+      // Datos del propietario (el backend maneja la separación de nombre y apellidos)
+      nombre_propietario: propietario.split(' ')[0] || '',
+      apellidos_propietario: propietario.split(' ').slice(1).join(' ') || '',
+      email,
+      telefono: celular,
+      tipo_telefono: 'celular',
+      // Dirección
+      calle: direccion,
+      numero_ext: '', // Estos campos pueden ser agregados si es necesario
+      numero_int: '',
+      codigo_postal: '',
+      colonia,
+      id_municipio: 1 // Valor por defecto, deberías ajustarlo según tu lógica
+    };
+
+    if (!nombreMascota || !fechaNacimiento || !peso || !propietario || !celular) {
       mostrarAlerta(
         "⚠️ Los campos se encuentran vacios ⚠️",
-        "Alguno de los campos se encuentran vacios revisa la información que ingresaste.",
+        "Alguno de los campos requeridos se encuentran vacios revisa la información que ingresaste.",
         cVacios,
         "Gato observándote porque están vacíos los campos"
       );
       return;
     }
 
-    guardarPaciente({ _id, propietario, celular, telefonoCasa, email, colonia, color, direccion, edad, especie, estado, fechaNacimiento, nombreMascota, peso, raza })
+    guardarPaciente(pacienteData);
     mostrarAlerta(
       "🎉 Actualización exitosa 🎉",
       "La información del paciente ha sido actualizada",
@@ -178,7 +221,7 @@ const handleEllipsisClick = (e, contact) => {
 
   const EditModal = ({ type }) => {
     const [formData, setFormData] = useState({
-      _id: '',
+      id: '',
       propietario: '',
       celular: '',
       telefonoCasa: '',
@@ -190,16 +233,13 @@ const handleEllipsisClick = (e, contact) => {
       especie: '',
       fechaNacimiento: '',
       raza: '',
-      color: '',
-      edad: '',
       peso: '',
-      cPostal: '',
     });
 
     useEffect(() => {
       if (selectedContact) {
         setFormData({
-          _id: selectedContact._id,
+          id: selectedContact.id,
           propietario: selectedContact.propietario || '',
           celular: selectedContact.celular || '',
           telefonoCasa: selectedContact.telefonoCasa || '',
@@ -213,10 +253,7 @@ const handleEllipsisClick = (e, contact) => {
             ? new Date(new Date(selectedContact.fechaNacimiento).getTime() + new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0]
             : '',
           raza: selectedContact.raza || '',
-          color: selectedContact.color || '',
-          edad: selectedContact.edad || '',
           peso: selectedContact.peso || '',
-          cPostal: selectedContact.cPostal || '',
         });
       }
     }, [type, selectedContact]);
@@ -241,8 +278,6 @@ const handleEllipsisClick = (e, contact) => {
       const updatedData = { ...formData };
       handleSubmit(e, updatedData);
     };
-
-   
 
     return (
       <div className={`edit-modal ${isEditModalOpen && !isClosing ? 'open' : ''} ${isClosing ? 'closing' : ''}`}>
@@ -341,24 +376,6 @@ const handleEllipsisClick = (e, contact) => {
                     ))}
                   </select>
                 </div>
-                {/*
-                <div className="input-group">
-                  <label htmlFor="cPostal">Código Postal</label>
-                  <MapPin size={20} />
-                  <input
-                    id="cPostal"
-                    name="cPostal"
-                    type="text"
-                    placeholder="Código Postal"
-                    value={formData.cPostal}
-                    onChange={handleChange}
-                    maxLength={5}
-                    pattern="\d{5}"
-                    title="El código postal debe contener 5 dígitos"
-                  />
-                </div>
-                */}
-
               </>
             ) : (
               <>
@@ -413,41 +430,17 @@ const handleEllipsisClick = (e, contact) => {
                   />
                 </div>
                 <div className="input-group">
-                  <label htmlFor="color">Color</label>
-                  <PawPrint size={20} />
-                  <input
-                    id="color"
-                    name="color"
-                    type="text"
-                    placeholder="Color"
-                    value={formData.color}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="input-group">
-                  <label htmlFor="edad">Edad</label>
-                  <Calendar size={20} />
-                  <input
-                    id="edad"
-                    name="edad"
-                    type="number"
-                    placeholder="Edad"
-                    value={formData.edad}
-                    onChange={handleChange}
-                    min="0"
-                  />
-                </div>
-                <div className="input-group">
                   <label htmlFor="peso">Peso</label>
                   <Weight size={20} />
                   <input
                     id="peso"
                     name="peso"
                     type="number"
-                    placeholder="Peso"
+                    placeholder="Peso (kg)"
                     value={formData.peso}
                     onChange={handleChange}
                     min="0"
+                    step="0.1"
                   />
                 </div>
               </>
@@ -461,15 +454,17 @@ const handleEllipsisClick = (e, contact) => {
       </div>
     );
   };
+
   useEffect(() => {
     // Actualiza el contacto seleccionado si el paciente ha sido editado
     if (selectedContact) {
-      const updatedContact = pacientes.find(contact => contact._id === selectedContact._id);
+      const updatedContact = contacts.find(contact => contact.id === selectedContact.id);
       if (updatedContact) {
         setSelectedContact(updatedContact);
       }
     }
-  }, [pacientes, selectedContact]);
+  }, [contacts, selectedContact]);
+
   return (
     <div className={`full-height-container background-cover ${isEditModalOpen ? 'blur-background' : ''}`}>
       <div className="veterinary-contacts">
@@ -478,16 +473,16 @@ const handleEllipsisClick = (e, contact) => {
             {isMenuOpen ? <X size={18} /> : <Menu size={24} />}
           </button>
         )}
-      <div className={`contacts-list ${isMobile && isMenuOpen ? 'open' : ''}`}>
-        <div className="contacts-header">
-          <button to="/admin" className="back-button" onClick={() => navigate('/admin')}>
-            <ArrowLeft size={24} />
-          </button>
-          <h2 className='titPacientes'>Pacientes</h2>
-          <button className="add-contact" onClick={() => navigate('/admin/registro-cliente')}>
-            <Plus size={24} />
-          </button>
-        </div>
+        <div className={`contacts-list ${isMobile && isMenuOpen ? 'open' : ''}`}>
+          <div className="contacts-header">
+            <button to="/admin" className="back-button" onClick={() => navigate('/admin')}>
+              <ArrowLeft size={24} />
+            </button>
+            <h2 className='titPacientes'>Pacientes</h2>
+            <button className="add-contact" onClick={() => navigate('/admin/registro-cliente')}>
+              <Plus size={24} />
+            </button>
+          </div>
           <input
             type="text"
             placeholder="Buscar paciente"
@@ -495,36 +490,36 @@ const handleEllipsisClick = (e, contact) => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-{filteredContacts.map((contact) => (
-  <div
-    key={contact._id}
-    className={`contact-item ${selectedContact && selectedContact._id === contact._id ? 'selected' : ''}`}
-  >
-    <div className="contact-content" onClick={() => selectContact(contact)}>
-      <div className="contact-avatar">
-        {contact.especie.toLowerCase() === 'perro' ? (
-          <img src="https://pampermut.com/blog/wp-content/uploads/2020/05/Como-es-el-caracter-de-tu-perro-segun-su-horoscopo-scaled.jpg" alt="Perro Avatar" />
-        ) : (
-          <img src="https://s1.elespanol.com/2020/05/18/como/gatos-mascotas-trucos_490961518_152142875_1706x960.jpg" alt="Cat Avatar" />
-        )}
-      </div>
-      <div className="contact-info">
-        <div className="contact-name">{contact.nombreMascota}</div>
-        <div className="contact-species">{contact.especie} - {contact.raza}</div>
-      </div>
-    </div>
-    <div className="contact-actions">
-      <EllipsisVertical 
-        size={20} 
-        className="ellipsis-icon" 
-        onClick={(e) => {
-          e.stopPropagation();
-          handleEllipsisClick(e, contact);
-        }}
-      />
-    </div>
-  </div>
-))}
+          {filteredContacts.map((contact) => (
+            <div
+              key={contact.id}
+              className={`contact-item ${selectedContact && selectedContact.id === contact.id ? 'selected' : ''}`}
+            >
+              <div className="contact-content" onClick={() => selectContact(contact)}>
+                <div className="contact-avatar">
+                  {contact.especie.toLowerCase() === 'perro' ? (
+                    <img src="https://pampermut.com/blog/wp-content/uploads/2020/05/Como-es-el-caracter-de-tu-perro-segun-su-horoscopo-scaled.jpg" alt="Perro Avatar" />
+                  ) : (
+                    <img src="https://s1.elespanol.com/2020/05/18/como/gatos-mascotas-trucos_490961518_152142875_1706x960.jpg" alt="Cat Avatar" />
+                  )}
+                </div>
+                <div className="contact-info">
+                  <div className="contact-name">{contact.nombreMascota}</div>
+                  <div className="contact-species">{contact.especie} - {contact.raza}</div>
+                </div>
+              </div>
+              <div className="contact-actions">
+                <EllipsisVertical 
+                  size={20} 
+                  className="ellipsis-icon" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEllipsisClick(e, contact);
+                  }}
+                />
+              </div>
+            </div>
+          ))}
         </div>
         <div className={`contact-details ${selectedContact ? 'open' : ''}`}>
           {selectedContact ? (
@@ -577,13 +572,6 @@ const handleEllipsisClick = (e, contact) => {
                       <MapPin size={20} />
                       <span><strong>Colonia:</strong> {selectedContact.colonia}</span>
                     </div>    
-                  {/* 
-                    <div className="info-item">
-                      <MapPin size={20} />
-                      <span><strong>Codigo postal:</strong> {selectedContact.cPostal}</span>
-                    </div>
-                    */}
-
                     <br />                   
                   </div>
                   <div className="widget">
@@ -606,14 +594,6 @@ const handleEllipsisClick = (e, contact) => {
                     <div className="info-item">
                       <PawPrint size={20} />
                       <span><strong>Raza:</strong> {selectedContact.raza}</span>
-                    </div>
-                    <div className="info-item">
-                      <PawPrint size={20} />
-                      <span><strong>Color:</strong> {selectedContact.color}</span>
-                    </div>
-                    <div className="info-item">
-                      <Calendar size={20} />
-                      <span><strong>Edad:</strong> {selectedContact.edad} años</span>
                     </div>
                     <div className="info-item">
                       <Weight size={20} />
