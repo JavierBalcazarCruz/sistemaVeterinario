@@ -42,13 +42,18 @@ const DatosPacientes = () => {
       raza: paciente.nombre_raza, // Cambio para usar nombre_raza que viene del JOIN
       fechaNacimiento: paciente.fecha_nacimiento,
       peso: paciente.peso,
-      // Valores por defecto para campos que no existen en la nueva estructura
-      email: '', // Será llenado más adelante
-      celular: '', 
-      telefonoCasa: '',
-      direccion: '',
-      colonia: '',
-      estado: '',
+      // Datos actualizados desde el backend
+      email: paciente.email || '',
+      celular: paciente.telefono_principal || '', 
+      telefonoCasa: paciente.telefono_secundario || '',
+      // Datos de dirección
+      direccion: paciente.direccion?.calle && paciente.direccion?.numero_ext ? 
+        `${paciente.direccion.calle} ${paciente.direccion.numero_ext}${paciente.direccion.numero_int ? ` Int. ${paciente.direccion.numero_int}` : ''}` : '',
+      colonia: paciente.direccion?.colonia || '',
+      codigo_postal: paciente.direccion?.codigo_postal || '',
+      municipio: paciente.direccion?.municipio || '',
+      estado: paciente.direccion?.estado || '',
+      referencias: paciente.direccion?.referencias || '',
       color: '', // Este campo no existe en la nueva estructura
       edad: '' // Este campo no existe en la nueva estructura
     }));
@@ -197,7 +202,7 @@ const DatosPacientes = () => {
 
   const handleSubmit = (e, updatedData) => {
     e.preventDefault();
-    const { id, propietario, celular, telefonoCasa, email, colonia, direccion, estado, fechaNacimiento, nombreMascota, peso, raza } = updatedData;
+    const { id, propietario, celular, telefonoCasa, email, colonia, direccion, estado, fechaNacimiento, nombreMascota, peso, raza, codigo_postal, municipio, referencias } = updatedData;
     
     // Preparar datos para enviar al backend MySQL
     const pacienteData = {
@@ -215,8 +220,11 @@ const DatosPacientes = () => {
       calle: direccion,
       numero_ext: '', // Estos campos pueden ser agregados si es necesario
       numero_int: '',
-      codigo_postal: '',
+      codigo_postal: codigo_postal,
       colonia,
+      municipio,
+      estado,
+      referencias,
       id_municipio: 1 // Valor por defecto, deberías ajustarlo según tu lógica
     };
 
@@ -257,7 +265,10 @@ const DatosPacientes = () => {
       email: '',
       direccion: '',
       colonia: '',
+      codigo_postal: '',
+      municipio: '',
       estado: '',
+      referencias: '',
       nombreMascota: '',
       especie: '',
       fechaNacimiento: '',
@@ -275,7 +286,10 @@ const DatosPacientes = () => {
           email: selectedContact.email || '',
           direccion: selectedContact.direccion || '',
           colonia: selectedContact.colonia || '',
+          codigo_postal: selectedContact.codigo_postal || '',
+          municipio: selectedContact.municipio || '',
           estado: selectedContact.estado || '',
+          referencias: selectedContact.referencias || '',
           nombreMascota: selectedContact.nombreMascota || '',
           especie: selectedContact.especie || '',
           fechaNacimiento: selectedContact.fechaNacimiento 
@@ -390,6 +404,19 @@ const DatosPacientes = () => {
                   />
                 </div>
                 <div className="input-group">
+                  <label htmlFor="codigo_postal">Código Postal</label>
+                  <MapPin size={20} />
+                  <input
+                    id="codigo_postal"
+                    name="codigo_postal"
+                    type="text"
+                    placeholder="Código Postal"
+                    value={formData.codigo_postal}
+                    onChange={handleChange}
+                    maxLength={5}
+                  />
+                </div>
+                <div className="input-group">
                   <label htmlFor="estado">Estado</label>
                   <MapPin size={20} />
                   <select
@@ -405,6 +432,31 @@ const DatosPacientes = () => {
                     ))}
                   </select>
                 </div>
+                <div className="input-group">
+                  <label htmlFor="municipio">Municipio</label>
+                  <MapPin size={20} />
+                  <input
+                    id="municipio"
+                    name="municipio"
+                    type="text"
+                    placeholder="Municipio"
+                    value={formData.municipio}
+                    onChange={handleChange}
+                  />
+                </div>
+                <div className="input-group">
+                  <label htmlFor="referencias">Referencias</label>
+                  <MapPin size={20} />
+                  <input
+                    id="referencias"
+                    name="referencias"
+                    type="text"
+                    placeholder="Referencias"
+                    value={formData.referencias}
+                    onChange={handleChange}
+                  />
+                </div>
+                
               </>
             ) : (
               <>
@@ -574,22 +626,48 @@ const DatosPacientes = () => {
                       <Edit size={20} className="edit-icon" onClick={() => openEditModal('owner')} />
                     </div>
                     <div className="widgett-content">
-                      <div className="info-item">
+                    <div className="info-item">
                         <User size={20} />
                         <span><strong>Dueño:</strong> {selectedContact.propietario}</span>
                       </div>
-                      <div className="info-item">
+                    <div className="info-item">
                         <Phone size={20} />
-                        <span><strong>Celular:</strong> {selectedContact.celular}</span>
+                        <span><strong>Celular:</strong> {selectedContact.celular || 'No registrado'}</span>
                       </div>
                       <div className="info-item">
                         <Phone size={20} />
-                        <span><strong>Teléfono de casa:</strong> {selectedContact.telefonoCasa}</span>
+                        <span><strong>Teléfono de casa:</strong> {selectedContact.telefonoCasa || 'No registrado'}</span>
                       </div>
                       <div className="info-item">
                         <Mail size={20} />
-                        <span><strong>Email:</strong> {selectedContact.email}</span>
-                      </div>  
+                        <span><strong>Email:</strong> {selectedContact.email || 'No registrado'}</span>
+                      </div>
+                      <div className="info-item">
+                        <MapPin size={20} />
+                        <span><strong>Dirección:</strong> {selectedContact.direccion || 'No registrada'}</span>
+                      </div>
+                      <div className="info-item">
+                        <MapPin size={20} />
+                        <span><strong>Colonia:</strong> {selectedContact.colonia || 'No registrada'}</span>
+                      </div>
+                      <div className="info-item">
+                        <MapPin size={20} />
+                        <span><strong>Código Postal:</strong> {selectedContact.codigo_postal || 'No registrado'}</span>
+                      </div>
+                      <div className="info-item">
+                        <MapPin size={20} />
+                        <span><strong>Municipio:</strong> {selectedContact.municipio || 'No registrado'}</span>
+                      </div>
+                      <div className="info-item">
+                        <MapPin size={20} />
+                        <span><strong>Estado:</strong> {selectedContact.estado || 'No registrado'}</span>
+                      </div>
+                      {selectedContact.referencias && (
+                        <div className="info-item">
+                          <MapPin size={20} />
+                          <span><strong>Referencias:</strong> {selectedContact.referencias}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="widgett-footer">
                       <p>ver mas</p>

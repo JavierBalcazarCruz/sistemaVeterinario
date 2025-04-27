@@ -272,18 +272,82 @@ const obtenerPacientes = async (req, res) => {
             
             const id_doctor = doctores[0].id;
             
-            // Consultar pacientes asociados a este doctor
+            // Consultar pacientes asociados a este doctor con información de teléfonos, email y dirección
             const [pacientes] = await connection.execute(
                 `SELECT p.*, r.nombre AS nombre_raza, e.nombre AS especie,
-                        pr.nombre AS nombre_propietario, pr.apellidos AS apellidos_propietario
+                        pr.nombre AS nombre_propietario, pr.apellidos AS apellidos_propietario,
+                        pr.email,
+                        GROUP_CONCAT(
+                            CASE WHEN t.principal = 1 THEN t.numero ELSE NULL END
+                        ) AS telefono_principal,
+                        GROUP_CONCAT(
+                            CASE WHEN t.principal = 0 THEN t.numero ELSE NULL END
+                            ORDER BY t.id ASC
+                        ) AS telefonos_secundarios,
+                        d.calle,
+                        d.numero_ext,
+                        d.numero_int,
+                        d.referencias,
+                        cp.codigo AS codigo_postal,
+                        cp.colonia,
+                        m.nombre AS municipio,
+                        est.nombre AS estado,
+                        pa.nombre AS pais
                  FROM pacientes p
                  INNER JOIN razas r ON p.id_raza = r.id
                  INNER JOIN especies e ON r.id_especie = e.id
                  INNER JOIN propietarios pr ON p.id_propietario = pr.id
+                 LEFT JOIN telefonos t ON t.id_propietario = pr.id
+                 LEFT JOIN direcciones d ON d.id_propietario = pr.id AND d.tipo = 'casa'
+                 LEFT JOIN codigo_postal cp ON d.id_codigo_postal = cp.id
+                 LEFT JOIN municipios m ON cp.id_municipio = m.id
+                 LEFT JOIN estados est ON m.id_estado = est.id
+                 LEFT JOIN paises pa ON est.id_pais = pa.id
                  WHERE p.id_doctor = ?
+                 GROUP BY p.id, r.nombre, e.nombre, pr.nombre, pr.apellidos, pr.email,
+                          d.calle, d.numero_ext, d.numero_int, d.referencias,
+                          cp.codigo, cp.colonia, m.nombre, est.nombre, pa.nombre
                  ORDER BY p.nombre_mascota ASC`,
                 [id_doctor]
             );
+            
+            // Procesar los teléfonos secundarios y estructurar dirección
+            pacientes.forEach(paciente => {
+                if (paciente.telefonos_secundarios) {
+                    const secundarios = paciente.telefonos_secundarios.split(',');
+                    paciente.telefono_secundario = secundarios[0] || '';
+                } else {
+                    paciente.telefono_secundario = '';
+                }
+                delete paciente.telefonos_secundarios;
+                
+                // Estructurar dirección
+                if (paciente.calle) {
+                    paciente.direccion = {
+                        calle: paciente.calle,
+                        numero_ext: paciente.numero_ext,
+                        numero_int: paciente.numero_int,
+                        referencias: paciente.referencias,
+                        codigo_postal: paciente.codigo_postal,
+                        colonia: paciente.colonia,
+                        municipio: paciente.municipio,
+                        estado: paciente.estado,
+                        pais: paciente.pais
+                    };
+                    // Limpiar campos individuales
+                    delete paciente.calle;
+                    delete paciente.numero_ext;
+                    delete paciente.numero_int;
+                    delete paciente.referencias;
+                    delete paciente.codigo_postal;
+                    delete paciente.colonia;
+                    delete paciente.municipio;
+                    delete paciente.estado;
+                    delete paciente.pais;
+                } else {
+                    paciente.direccion = null;
+                }
+            });
             
             return res.json(pacientes);
         } else if (req.usuario.rol === 'admin' || req.usuario.rol === 'superadmin') {
@@ -291,17 +355,81 @@ const obtenerPacientes = async (req, res) => {
             const [pacientes] = await connection.execute(
                 `SELECT p.*, r.nombre AS nombre_raza, e.nombre AS especie,
                         pr.nombre AS nombre_propietario, pr.apellidos AS apellidos_propietario,
-                        CONCAT(u.nombre, ' ', u.apellidos) AS doctor
+                        pr.email,
+                        CONCAT(u.nombre, ' ', u.apellidos) AS doctor,
+                        GROUP_CONCAT(
+                            CASE WHEN t.principal = 1 THEN t.numero ELSE NULL END
+                        ) AS telefono_principal,
+                        GROUP_CONCAT(
+                            CASE WHEN t.principal = 0 THEN t.numero ELSE NULL END
+                            ORDER BY t.id ASC
+                        ) AS telefonos_secundarios,
+                        dir.calle,
+                        dir.numero_ext,
+                        dir.numero_int,
+                        dir.referencias,
+                        cp.codigo AS codigo_postal,
+                        cp.colonia,
+                        m.nombre AS municipio,
+                        est.nombre AS estado,
+                        pa.nombre AS pais
                  FROM pacientes p
                  INNER JOIN razas r ON p.id_raza = r.id
                  INNER JOIN especies e ON r.id_especie = e.id
                  INNER JOIN propietarios pr ON p.id_propietario = pr.id
                  INNER JOIN doctores d ON p.id_doctor = d.id
                  INNER JOIN usuarios u ON d.id_usuario = u.id
+                 LEFT JOIN telefonos t ON t.id_propietario = pr.id
+                 LEFT JOIN direcciones dir ON dir.id_propietario = pr.id AND dir.tipo = 'casa'
+                 LEFT JOIN codigo_postal cp ON dir.id_codigo_postal = cp.id
+                 LEFT JOIN municipios m ON cp.id_municipio = m.id
+                 LEFT JOIN estados est ON m.id_estado = est.id
+                 LEFT JOIN paises pa ON est.id_pais = pa.id
                  WHERE u.id_licencia_clinica = ?
+                 GROUP BY p.id, r.nombre, e.nombre, pr.nombre, pr.apellidos, pr.email, 
+                          u.nombre, u.apellidos, dir.calle, dir.numero_ext, dir.numero_int, 
+                          dir.referencias, cp.codigo, cp.colonia, m.nombre, est.nombre, pa.nombre
                  ORDER BY p.nombre_mascota ASC`,
                 [req.usuario.id_licencia_clinica]
             );
+            
+            // Procesar los teléfonos secundarios y estructurar dirección
+            pacientes.forEach(paciente => {
+                if (paciente.telefonos_secundarios) {
+                    const secundarios = paciente.telefonos_secundarios.split(',');
+                    paciente.telefono_secundario = secundarios[0] || '';
+                } else {
+                    paciente.telefono_secundario = '';
+                }
+                delete paciente.telefonos_secundarios;
+                
+                // Estructurar dirección
+                if (paciente.calle) {
+                    paciente.direccion = {
+                        calle: paciente.calle,
+                        numero_ext: paciente.numero_ext,
+                        numero_int: paciente.numero_int,
+                        referencias: paciente.referencias,
+                        codigo_postal: paciente.codigo_postal,
+                        colonia: paciente.colonia,
+                        municipio: paciente.municipio,
+                        estado: paciente.estado,
+                        pais: paciente.pais
+                    };
+                    // Limpiar campos individuales
+                    delete paciente.calle;
+                    delete paciente.numero_ext;
+                    delete paciente.numero_int;
+                    delete paciente.referencias;
+                    delete paciente.codigo_postal;
+                    delete paciente.colonia;
+                    delete paciente.municipio;
+                    delete paciente.estado;
+                    delete paciente.pais;
+                } else {
+                    paciente.direccion = null;
+                }
+            });
             
             return res.json(pacientes);
         } else if (req.usuario.rol === 'recepcion') {
@@ -309,17 +437,81 @@ const obtenerPacientes = async (req, res) => {
             const [pacientes] = await connection.execute(
                 `SELECT p.*, r.nombre AS nombre_raza, e.nombre AS especie,
                         pr.nombre AS nombre_propietario, pr.apellidos AS apellidos_propietario,
-                        CONCAT(u.nombre, ' ', u.apellidos) AS doctor
+                        pr.email,
+                        CONCAT(u.nombre, ' ', u.apellidos) AS doctor,
+                        GROUP_CONCAT(
+                            CASE WHEN t.principal = 1 THEN t.numero ELSE NULL END
+                        ) AS telefono_principal,
+                        GROUP_CONCAT(
+                            CASE WHEN t.principal = 0 THEN t.numero ELSE NULL END
+                            ORDER BY t.id ASC
+                        ) AS telefonos_secundarios,
+                        dir.calle,
+                        dir.numero_ext,
+                        dir.numero_int,
+                        dir.referencias,
+                        cp.codigo AS codigo_postal,
+                        cp.colonia,
+                        m.nombre AS municipio,
+                        est.nombre AS estado,
+                        pa.nombre AS pais
                  FROM pacientes p
                  INNER JOIN razas r ON p.id_raza = r.id
                  INNER JOIN especies e ON r.id_especie = e.id
                  INNER JOIN propietarios pr ON p.id_propietario = pr.id
                  INNER JOIN doctores d ON p.id_doctor = d.id
                  INNER JOIN usuarios u ON d.id_usuario = u.id
+                 LEFT JOIN telefonos t ON t.id_propietario = pr.id
+                 LEFT JOIN direcciones dir ON dir.id_propietario = pr.id AND dir.tipo = 'casa'
+                 LEFT JOIN codigo_postal cp ON dir.id_codigo_postal = cp.id
+                 LEFT JOIN municipios m ON cp.id_municipio = m.id
+                 LEFT JOIN estados est ON m.id_estado = est.id
+                 LEFT JOIN paises pa ON est.id_pais = pa.id
                  WHERE u.id_licencia_clinica = ?
+                 GROUP BY p.id, r.nombre, e.nombre, pr.nombre, pr.apellidos, pr.email, 
+                          u.nombre, u.apellidos, dir.calle, dir.numero_ext, dir.numero_int, 
+                          dir.referencias, cp.codigo, cp.colonia, m.nombre, est.nombre, pa.nombre
                  ORDER BY p.nombre_mascota ASC`,
                 [req.usuario.id_licencia_clinica]
             );
+            
+            // Procesar los teléfonos secundarios y estructurar dirección
+            pacientes.forEach(paciente => {
+                if (paciente.telefonos_secundarios) {
+                    const secundarios = paciente.telefonos_secundarios.split(',');
+                    paciente.telefono_secundario = secundarios[0] || '';
+                } else {
+                    paciente.telefono_secundario = '';
+                }
+                delete paciente.telefonos_secundarios;
+                
+                // Estructurar dirección
+                if (paciente.calle) {
+                    paciente.direccion = {
+                        calle: paciente.calle,
+                        numero_ext: paciente.numero_ext,
+                        numero_int: paciente.numero_int,
+                        referencias: paciente.referencias,
+                        codigo_postal: paciente.codigo_postal,
+                        colonia: paciente.colonia,
+                        municipio: paciente.municipio,
+                        estado: paciente.estado,
+                        pais: paciente.pais
+                    };
+                    // Limpiar campos individuales
+                    delete paciente.calle;
+                    delete paciente.numero_ext;
+                    delete paciente.numero_int;
+                    delete paciente.referencias;
+                    delete paciente.codigo_postal;
+                    delete paciente.colonia;
+                    delete paciente.municipio;
+                    delete paciente.estado;
+                    delete paciente.pais;
+                } else {
+                    paciente.direccion = null;
+                }
+            });
             
             return res.json(pacientes);
         }
@@ -340,7 +532,6 @@ const obtenerPacientes = async (req, res) => {
         }
     }
 };
-
 /**
  * Obtiene información detallada de un paciente específico
  * Valida que el usuario tenga permisos para ver este paciente
@@ -360,10 +551,11 @@ const obtenerPaciente = async (req, res) => {
         // 3. Establecer conexión a la BD
         connection = await conectarDB();
         
-        // 4. Obtener información del paciente con datos relacionados
+        // 4. Obtener información del paciente con datos relacionados incluyendo email y teléfonos
         const [pacientes] = await connection.execute(
             `SELECT p.*, r.nombre AS nombre_raza, e.nombre AS especie,
                     pr.nombre AS nombre_propietario, pr.apellidos AS apellidos_propietario,
+                    pr.email,
                     d.id AS doctor_id, u.id AS doctor_usuario_id
              FROM pacientes p
              INNER JOIN razas r ON p.id_raza = r.id
@@ -403,11 +595,64 @@ const obtenerPaciente = async (req, res) => {
             return res.status(403).json({ msg: 'No tienes permiso para acceder a este paciente' });
         }
         
-        // 7. Limpiar información sensible o interna antes de enviar
+        // 7. Obtener teléfonos del propietario
+        const [telefonos] = await connection.execute(
+            `SELECT numero, tipo, principal 
+             FROM telefonos 
+             WHERE id_propietario = ? 
+             ORDER BY principal DESC, id ASC`,
+            [paciente.id_propietario]
+        );
+        
+        // 8. Obtener dirección completa del propietario
+        const [direcciones] = await connection.execute(
+            `SELECT 
+                d.calle,
+                d.numero_ext,
+                d.numero_int,
+                d.referencias,
+                cp.codigo AS codigo_postal,
+                cp.colonia,
+                m.nombre AS municipio,
+                e.nombre AS estado,
+                p.nombre AS pais
+            FROM direcciones d
+            INNER JOIN codigo_postal cp ON d.id_codigo_postal = cp.id
+            INNER JOIN municipios m ON cp.id_municipio = m.id
+            INNER JOIN estados e ON m.id_estado = e.id
+            INNER JOIN paises p ON e.id_pais = p.id
+            WHERE d.id_propietario = ? AND d.tipo = 'casa'
+            LIMIT 1`,
+            [paciente.id_propietario]
+        );
+        
+        // 9. Asignar teléfonos al paciente
+        paciente.telefono_principal = telefonos.find(t => t.principal === 1)?.numero || '';
+        paciente.telefono_secundario = telefonos.find((t, index) => index === 1)?.numero || '';
+        
+        // 10. Asignar dirección al paciente
+        if (direcciones.length > 0) {
+            const dir = direcciones[0];
+            paciente.direccion = {
+                calle: dir.calle,
+                numero_ext: dir.numero_ext,
+                numero_int: dir.numero_int,
+                referencias: dir.referencias,
+                codigo_postal: dir.codigo_postal,
+                colonia: dir.colonia,
+                municipio: dir.municipio,
+                estado: dir.estado,
+                pais: dir.pais
+            };
+        } else {
+            paciente.direccion = null;
+        }
+        
+        // 11. Limpiar información sensible o interna antes de enviar
         delete paciente.doctor_id;
         delete paciente.doctor_usuario_id;
         
-        // 8. Devolver la información del paciente
+        // 12. Devolver la información del paciente
         res.json(paciente);
         
     } catch (error) {

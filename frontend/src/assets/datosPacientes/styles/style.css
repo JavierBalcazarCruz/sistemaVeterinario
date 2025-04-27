@@ -6,7 +6,7 @@
 }
 
 .background-cover {
-  background-image: url('https://r4.wallpaperflare.com/wallpaper/618/711/643/nature-leaves-plants-water-drops-wallpaper-62a102106d965efb1ac872a5e088d9f2.jpg');
+  background-image: url('https://raw.githubusercontent.com/getumbrel/umbrel/fb31fb98e4088628c5de21357fbec8cff74a13d7/packages/dashboard/public/wallpapers/1.jpg');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -821,7 +821,7 @@ h2.pacientes-title {
   }
   
   .background-cover {
-    background-image: url('https://r4.wallpaperflare.com/wallpaper/618/711/643/nature-leaves-plants-water-drops-wallpaper-62a102106d965efb1ac872a5e088d9f2.jpg');
+    background-image: url('https://raw.githubusercontent.com/getumbrel/umbrel/fb31fb98e4088628c5de21357fbec8cff74a13d7/packages/dashboard/public/wallpapers/1.jpg');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
