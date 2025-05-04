@@ -556,12 +556,12 @@ h2.pacientes-title {
   }
   
   .input-container {
-    padding: 8px 10px; /* Más padding para facilitar la interacción táctil */
+    padding: 4px 5px; /* Más padding para facilitar la interacción táctil */
   }
   
   .input-container input,
   .input-container select {
-    padding: 10px 8px;
+    padding: 4px 5px;
     font-size: 16px; /* Texto más grande en móvil para mejor legibilidad */
   }
   
@@ -578,6 +578,11 @@ h2.pacientes-title {
 @media (max-width: 441px) {
   .modal-content form {
     padding-top: 70px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .form-field {
+    margin-bottom: 1px !important; /* Más espacio entre campos en móvil */
   }
 }
 
@@ -843,4 +848,10 @@ h2.pacientes-title {
   .widgett-header {
     padding: 12px 15px; /* Menos padding en headers */
   }
+  .modal-content form {
+    padding-top: 45px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+  
 }
