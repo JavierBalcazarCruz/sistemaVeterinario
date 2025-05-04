@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu, X, Phone, Mail, MapPin, User, Plus, Stethoscope, PawPrint, Calendar, Weight , Edit, EllipsisVertical,ArrowLeft  } from 'lucide-react';
+import { Menu, X, Phone, Mail, MapPin, User, Plus, Stethoscope, PawPrint, Calendar, Weight, Edit, EllipsisVertical, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import "../assets/datosPacientes/styles/style.css";
 
@@ -86,8 +86,6 @@ const DatosPacientes = () => {
            raza.toLowerCase().includes(searchLower) ||
            especie.toLowerCase().includes(searchLower);
   });
-
-
 
   // Animar los widgets solo cuando se selecciona un contacto por primera vez
   useEffect(() => {
@@ -322,210 +320,83 @@ const DatosPacientes = () => {
       handleSubmit(e, updatedData);
     };
 
+    // Owner fields configuration
+    const ownerFields = [
+      { id: 'propietario', name: 'propietario', label: 'Nombre del dueño', type: 'text', icon: User, required: true },
+      { id: 'celular', name: 'celular', label: 'Celular', type: 'tel', icon: Phone, required: true },
+      { id: 'telefonoCasa', name: 'telefonoCasa', label: 'Teléfono de casa', type: 'tel', icon: Phone },
+      { id: 'email', name: 'email', label: 'Email', type: 'email', icon: Mail },
+      { id: 'direccion', name: 'direccion', label: 'Domicilio', type: 'text', icon: MapPin },
+      { id: 'colonia', name: 'colonia', label: 'Colonia', type: 'text', icon: MapPin },
+      { id: 'codigo_postal', name: 'codigo_postal', label: 'Código Postal', type: 'text', icon: MapPin, maxLength: 5 },
+      { 
+        id: 'estado', 
+        name: 'estado', 
+        label: 'Estado', 
+        type: 'select', 
+        icon: MapPin, 
+        required: true,
+        options: mexicanStates.map(state => ({ value: state, label: state })),
+        placeholder: 'Selecciona un estado'
+      },
+      { id: 'municipio', name: 'municipio', label: 'Municipio', type: 'text', icon: MapPin },
+      { id: 'referencias', name: 'referencias', label: 'Referencias', type: 'text', icon: MapPin },
+    ];
+
+    // Pet fields configuration
+    const petFields = [
+      { id: 'nombreMascota', name: 'nombreMascota', label: 'Mascota', type: 'text', icon: PawPrint, required: true },
+      { id: 'especie', name: 'especie', label: 'Especie', type: 'text', icon: Stethoscope, required: true },
+      { id: 'fechaNacimiento', name: 'fechaNacimiento', label: 'Fecha de nacimiento', type: 'date', icon: Calendar },
+      { id: 'raza', name: 'raza', label: 'Raza', type: 'text', icon: PawPrint },
+      { id: 'peso', name: 'peso', label: 'Peso', type: 'number', icon: Weight, min: "0", step: "0.1" },
+    ];
+
+    // Choose the appropriate field set based on modal type
+    const fields = type === 'owner' ? ownerFields : petFields;
+
     return (
       <div className={`edit-modal ${isEditModalOpen && !isClosing ? 'open' : ''} ${isClosing ? 'closing' : ''}`}>
         <div className="modal-content">
-          <h2>Editar {type === 'owner' ? 'Información del Dueño' : 'Información de la Mascota'}</h2>
-          <form onSubmit={handleFormSubmit}>
-            {type === 'owner' ? (
-              <>
-                <div className="input-group">
-                  <label htmlFor="propietario">Nombre del dueño</label>
-                  <User size={20} />
-                  <input
-                    id="propietario"
-                    name="propietario"
-                    type="text"
-                    placeholder="Dueño"
-                    value={formData.propietario}
-                    onChange={handleChange}
-                    required
-                  />
+          <h2>{type === 'owner' ? 'Información del Dueño' : 'Información de la Mascota'}</h2>
+          <form onSubmit={handleFormSubmit} className="edit-form">
+            <div className="form-fields-grid">
+              {fields.map((field) => (
+                <div className="form-field" key={field.id}>
+                  <label htmlFor={field.id}>{field.label}{field.required && <span className="required">*</span>}</label>
+                  <div className="input-container">
+                    <field.icon size={20} />
+                    {field.type === 'select' ? (
+                      <select
+                        id={field.id}
+                        name={field.name}
+                        value={formData[field.name]}
+                        onChange={handleChange}
+                        required={field.required}
+                      >
+                        <option value="" disabled>{field.placeholder}</option>
+                        {field.options.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        id={field.id}
+                        name={field.name}
+                        type={field.type}
+                        placeholder={field.label}
+                        value={formData[field.name]}
+                        onChange={handleChange}
+                        required={field.required}
+                        maxLength={field.maxLength}
+                        min={field.min}
+                        step={field.step}
+                      />
+                    )}
+                  </div>
                 </div>
-                <div className="input-group">
-                  <label htmlFor="celular">Celular</label>
-                  <Phone size={20} />
-                  <input
-                    id="celular"
-                    name="celular"
-                    type="tel"
-                    placeholder="Celular"
-                    value={formData.celular}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                <div className="input-group">
-                  <label htmlFor="telefonoCasa">Teléfono de casa</label>
-                  <Phone size={20} />
-                  <input
-                    id="telefonoCasa"
-                    name="telefonoCasa"
-                    type="tel"
-                    placeholder="Teléfono de casa"
-                    value={formData.telefonoCasa}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="input-group">
-                  <label htmlFor="email">Email</label>
-                  <Mail size={20} />
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    placeholder="Email"
-                    value={formData.email}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="input-group">
-                  <label htmlFor="direccion">Domicilio</label>
-                  <MapPin size={20} />
-                  <input
-                    id="direccion"
-                    name="direccion"
-                    type="text"
-                    placeholder="Domicilio"
-                    value={formData.direccion}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="input-group">
-                  <label htmlFor="colonia">Colonia</label>
-                  <MapPin size={20} />
-                  <input
-                    id="colonia"
-                    name="colonia"
-                    type="text"
-                    placeholder="Colonia"
-                    value={formData.colonia}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="input-group">
-                  <label htmlFor="codigo_postal">Código Postal</label>
-                  <MapPin size={20} />
-                  <input
-                    id="codigo_postal"
-                    name="codigo_postal"
-                    type="text"
-                    placeholder="Código Postal"
-                    value={formData.codigo_postal}
-                    onChange={handleChange}
-                    maxLength={5}
-                  />
-                </div>
-                <div className="input-group">
-                  <label htmlFor="estado">Estado</label>
-                  <MapPin size={20} />
-                  <select
-                    id="estado"
-                    name="estado"
-                    value={formData.estado}
-                    onChange={handleChange}
-                    required
-                  >
-                    <option value="" disabled>Selecciona un estado</option>
-                    {mexicanStates.map((state) => (
-                      <option key={state} value={state}>{state}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="input-group">
-                  <label htmlFor="municipio">Municipio</label>
-                  <MapPin size={20} />
-                  <input
-                    id="municipio"
-                    name="municipio"
-                    type="text"
-                    placeholder="Municipio"
-                    value={formData.municipio}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="input-group">
-                  <label htmlFor="referencias">Referencias</label>
-                  <MapPin size={20} />
-                  <input
-                    id="referencias"
-                    name="referencias"
-                    type="text"
-                    placeholder="Referencias"
-                    value={formData.referencias}
-                    onChange={handleChange}
-                  />
-                </div>
-                
-              </>
-            ) : (
-              <>
-                <div className="input-group">
-                  <label htmlFor="nombreMascota">Mascota</label>
-                  <PawPrint size={20} />
-                  <input
-                    id="nombreMascota"
-                    name="nombreMascota"
-                    type="text"
-                    placeholder="Nombre de la mascota"
-                    value={formData.nombreMascota}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                <div className="input-group">
-                  <label htmlFor="especie">Especie</label>
-                  <Stethoscope size={20} />
-                  <input
-                    id="especie"
-                    name="especie"
-                    type="text"
-                    placeholder="Especie"
-                    value={formData.especie}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                <div className="input-group">
-                  <label htmlFor="fechaNacimiento">Fecha de nacimiento</label>
-                  <Calendar size={20} />
-                  <input
-                    id="fechaNacimiento"
-                    name="fechaNacimiento"
-                    type="date"
-                    placeholder="Fecha de nacimiento"
-                    value={formData.fechaNacimiento}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="input-group">
-                  <label htmlFor="raza">Raza</label>
-                  <PawPrint size={20} />
-                  <input
-                    id="raza"
-                    name="raza"
-                    type="text"
-                    placeholder="Raza"
-                    value={formData.raza}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="input-group">
-                  <label htmlFor="peso">Peso</label>
-                  <Weight size={20} />
-                  <input
-                    id="peso"
-                    name="peso"
-                    type="number"
-                    placeholder="Peso (kg)"
-                    value={formData.peso}
-                    onChange={handleChange}
-                    min="0"
-                    step="0.1"
-                  />
-                </div>
-              </>
-            )}
+              ))}
+            </div>
             <div className="modal-actions">
               <button type="button" onClick={closeEditModal}>Cancelar</button>
               <button type="submit">Guardar</button>
