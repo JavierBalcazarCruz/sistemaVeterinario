@@ -80,8 +80,7 @@ const RegistroCliente = () => {
         left top
         no-repeat
       `,
-      background: 'rgba(255, 255, 255, 0.25)',
-      backdropFilter: 'blur(10px)'
+    
     });
   };
   const validarCampos = (paso) => {
