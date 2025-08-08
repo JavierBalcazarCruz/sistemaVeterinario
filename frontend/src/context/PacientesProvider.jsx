@@ -1,117 +1,247 @@
-import { createContext, useState, useEffect, Children } from "react";
+// PacientesProvider.jsx - Versión Corregida
+import { createContext, useState, useEffect } from "react";
 import clienteAxios from '../config/axios';
 import useAuth from "../hooks/useAuth";
 
-//Este se importa y se crea el hook PacientesProviders 
 const PacientesContext = createContext();
-//Todas las modificaciones del state van a residir  dentro de este context, por que aqui estan las funciones que lo modifican
-//Donde vienen los datos
-export const PacientesProvider = ({children}) =>{
+
+export const PacientesProvider = ({children}) => {
     const [pacientes, setPacientes] = useState([]);
     const [pacienteSeleccionado, setPacienteSeleccionado] = useState(null);
+    const [cargando, setCargando] = useState(false);
     const { auth } = useAuth();
 
-    //Cuando cargue el componente se va llamar la API para poder recuperar los datos
-    useEffect(() =>{
-        const obtenerPacientes = async () =>{
+    // Obtener pacientes cuando carga el componente
+    useEffect(() => {
+        const obtenerPacientes = async () => {
             try {
                 const token = localStorage.getItem('apv_token');
                 if (!token) return;
+                
+                setCargando(true);
                 const config = {
-                    headers:{
+                    headers: {
                         "Content-Type": "application/json",
                         Authorization: `Bearer ${token}`
                     }
-                }
-                //Petición get para obtener los pacientes
-                const { data } = await clienteAxios.get('/pacientes',config);
-                //Se seteea el data en pacientes para que se pueda usar en cualquier componente
-              
+                };
+                
+                const { data } = await clienteAxios.get('/pacientes', config);
                 setPacientes(data);
+                
+            } catch (error) {
+                console.error('Error al obtener pacientes:', error);
+                setPacientes([]);
+            } finally {
+                setCargando(false);
+            }
+        };
 
-               } catch (error) {
-                console.log(error.response.data.msg);
-               }
+        if (auth?.id) {
+            obtenerPacientes();
         }
-        obtenerPacientes()
-    }, [auth])
+    }, [auth]);
 
-    //Función guardarPaciente aquí se va insertar en la api
-    const guardarPaciente = async (paciente) =>{
-
+    // ✅ CORRECCIÓN PRINCIPAL: Función guardarPaciente corregida
+    const guardarPaciente = async (paciente) => {
         const token = localStorage.getItem('apv_token');
-            const config = {
-                headers:{
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`
+        if (!token) {
+            throw new Error('No hay token de autenticación');
+        }
+
+        const config = {
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`
+            }
+        };
+
+        setCargando(true);
+
+        try {
+            // ✅ Verificar si es actualización o creación por la presencia del campo 'id'
+            if (paciente.id) {
+                // ACTUALIZACIÓN - paciente existente
+                console.log('Actualizando paciente con ID:', paciente.id);
+                
+                const { data } = await clienteAxios.put(`/pacientes/${paciente.id}`, paciente, config);
+                
+                // Actualizar el estado local
+                const pacientesActualizados = pacientes.map(p => 
+                    p.id === data.id ? data : p
+                );
+                setPacientes(pacientesActualizados);
+
+                // Actualizar paciente seleccionado si coincide
+                if (pacienteSeleccionado && pacienteSeleccionado.id === data.id) {
+                    setPacienteSeleccionado(data);
                 }
+
+                return { success: true, data, msg: 'Paciente actualizado correctamente' };
+
+            } else {
+                // CREACIÓN - nuevo paciente
+                console.log('Creando nuevo paciente:', paciente);
+                
+                const { data } = await clienteAxios.post('/pacientes', paciente, config);
+                
+                // ✅ Agregar al inicio del array para que aparezca primero
+                setPacientes(prevPacientes => [data, ...prevPacientes]);
+
+                return { success: true, data, msg: 'Paciente registrado correctamente' };
             }
 
-        
-            if(paciente._id){
-                let id = paciente._id;
-                // Va editar un paciente existente
-                try {            
-                    const { data } = await clienteAxios.put(`/pacientes/${id}`, paciente, config);
+        } catch (error) {
+            console.error('Error en guardarPaciente:', error);
             
-                    // Actualiza el elemento modificado en la lista
-                    const pacienteActualizado = pacientes.map( pacienteState => pacienteState._id === data._id ? data : pacienteState)
-                    setPacientes(pacienteActualizado);
+            // Manejar diferentes tipos de errores
+            let mensajeError = 'Error desconocido';
             
-                    // Si el paciente modificado es el seleccionado, actualízalo
-                    if (pacienteSeleccionado && pacienteSeleccionado._id === data._id) {
-                        setPacienteSeleccionado(data);
-                    }
-            
-                } catch (error) {
-                    console.log(error);
-                }
-            }else{
-           //Dar de alta un nuevo registro
-           try {       
-                
-            const { data } = await clienteAxios.post('/pacientes', paciente,config);
-            const { __v, ...pacienteAlmacenado } = data;
-            setPacientes([pacienteAlmacenado, ...pacientes])
-           } catch (error) {
-            console.log(error.response.data.msg);
-           }       
-        }     
-    }
+            if (error.response?.data?.msg) {
+                mensajeError = error.response.data.msg;
+            } else if (error.response?.status === 400) {
+                mensajeError = 'Datos incorrectos. Revisa la información ingresada.';
+            } else if (error.response?.status === 401) {
+                mensajeError = 'No tienes autorización. Inicia sesión nuevamente.';
+            } else if (error.response?.status >= 500) {
+                mensajeError = 'Error del servidor. Inténtalo más tarde.';
+            } else if (error.message) {
+                mensajeError = error.message;
+            }
 
-    //Funcion para eliminar pacientes
-    const eliminarPacientes = async id => {
+            throw new Error(mensajeError);
+            
+        } finally {
+            setCargando(false);
+        }
+    };
+
+    // ✅ Función mejorada para eliminar pacientes
+    const eliminarPacientes = async (id) => {
+        if (!id) {
+            throw new Error('ID de paciente requerido');
+        }
+
+        const token = localStorage.getItem('apv_token');
+        if (!token) {
+            throw new Error('No hay token de autenticación');
+        }
+
+        const config = {
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`
+            }
+        };
+
+        setCargando(true);
+
+        try {
+            await clienteAxios.delete(`/pacientes/${id}`, config);
+            
+            // Actualizar estado local
+            const pacientesActualizados = pacientes.filter(paciente => paciente.id !== id);
+            setPacientes(pacientesActualizados);
+
+            // Limpiar paciente seleccionado si era el eliminado
+            if (pacienteSeleccionado?.id === id) {
+                setPacienteSeleccionado(null);
+            }
+
+            return { success: true, msg: 'Paciente eliminado correctamente' };
+
+        } catch (error) {
+            console.error('Error al eliminar paciente:', error);
+            
+            let mensajeError = 'Error al eliminar el paciente';
+            if (error.response?.data?.msg) {
+                mensajeError = error.response.data.msg;
+            }
+
+            throw new Error(mensajeError);
+            
+        } finally {
+            setCargando(false);
+        }
+    };
+
+    // ✅ Función para refrescar la lista de pacientes
+    const refrescarPacientes = async () => {
         try {
             const token = localStorage.getItem('apv_token');
+            if (!token) return;
+
+            setCargando(true);
             const config = {
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`
                 }
-            }
-            await clienteAxios.delete(`/pacientes/${id}`, config);
-            const pacientesActualizados = pacientes.filter(pacienteState => pacienteState._id !== id);
-            setPacientes(pacientesActualizados);
+            };
+
+            const { data } = await clienteAxios.get('/pacientes', config);
+            setPacientes(data);
+
         } catch (error) {
-            console.log(error);
+            console.error('Error al refrescar pacientes:', error);
+        } finally {
+            setCargando(false);
         }
-    }
+    };
 
+    // ✅ Función para buscar un paciente específico
+    const obtenerPaciente = async (id) => {
+        if (!id) return null;
 
+        const token = localStorage.getItem('apv_token');
+        if (!token) return null;
 
+        const config = {
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`
+            }
+        };
 
-    return(
-        //Van todos los componentes hijos de pacientesContext.provider, ya se pueden extraer en diferentes componentes
-        <PacientesContext.Provider
-            value={{
-                pacientes,
-                guardarPaciente,
-                setPacienteSeleccionado,
-                eliminarPacientes
-            }}
-        >
+        try {
+            setCargando(true);
+            const { data } = await clienteAxios.get(`/pacientes/${id}`, config);
+            return data;
+
+        } catch (error) {
+            console.error('Error al obtener paciente:', error);
+            return null;
+        } finally {
+            setCargando(false);
+        }
+    };
+
+    // ✅ Valor del contexto con todas las funciones y estados
+    const contextValue = {
+        // Estados
+        pacientes,
+        pacienteSeleccionado,
+        cargando,
+        
+        // Funciones de estado
+        setPacienteSeleccionado,
+        
+        // Funciones de API
+        guardarPaciente,
+        eliminarPacientes,
+        refrescarPacientes,
+        obtenerPaciente,
+
+        // Utilidades
+        totalPacientes: pacientes.length,
+        pacientesActivos: pacientes.filter(p => p.estado === 'activo').length
+    };
+
+    return (
+        <PacientesContext.Provider value={contextValue}>
             {children}
         </PacientesContext.Provider>
     );
-}
+};
+
 export default PacientesContext;

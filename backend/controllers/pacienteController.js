@@ -5,80 +5,80 @@ import conectarDB from '../config/db.js';
 const agregarPaciente = async (req, res) => {
     let connection;
     try {
-        // 1. Extraer y validar datos del propietario
+        console.log('Datos recibidos:', req.body); // Para debugging
+
+        // ✅ 1. Extraer y validar datos con nombres correctos
         const {
             // Datos del propietario
             nombre_propietario,
             apellidos_propietario,
             email,
             telefono,
-            tipo_telefono,
+            tipo_telefono = 'celular',
+            
             // Datos de dirección
             calle,
-            numero_ext,
-            numero_int,
+            numero_ext = '1',
+            numero_int = '',
             codigo_postal,
             colonia,
-            id_municipio,
+            id_municipio = 1, // Por defecto
+            referencias = '',
+            
             // Datos del paciente
             nombre_mascota,
             fecha_nacimiento,
             peso,
             id_raza,
-            foto_url
+            foto_url = null
         } = req.body;
 
-        // 2. Validaciones básicas
-        if (!nombre_propietario?.trim() || !apellidos_propietario?.trim() || !email?.trim()) {
-            return res.status(400).json({ msg: 'Datos del propietario incompletos' });
+        // ✅ 2. Validaciones mejoradas con mensajes específicos
+        if (!nombre_propietario?.trim()) {
+            return res.status(400).json({ 
+                msg: 'El nombre del propietario es obligatorio',
+                campo: 'nombre_propietario'
+            });
         }
 
-        if (!nombre_mascota?.trim() || !id_raza) {
-            return res.status(400).json({ msg: 'Datos del paciente incompletos' });
+        if (!nombre_mascota?.trim()) {
+            return res.status(400).json({ 
+                msg: 'El nombre de la mascota es obligatorio',
+                campo: 'nombre_mascota'
+            });
         }
 
-        // 3. Limpieza de datos
-        const datosLimpios = {
-            propietario: {
-                nombre: nombre_propietario.trim(),
-                apellidos: apellidos_propietario.trim(),
-                email: email.trim().toLowerCase(),
-            },
-            direccion: {
-                calle: calle?.trim(),
-                numero_ext: numero_ext?.trim(),
-                numero_int: numero_int?.trim(),
-                codigo_postal: codigo_postal?.trim(),
-                id_municipio
-            },
-            paciente: {
-                nombre: nombre_mascota.trim(),
-                fecha_nacimiento,
-                peso: parseFloat(peso),
-                id_raza,
-                foto_url: foto_url?.trim()
-            }
-        };
-
-        // 4. Validaciones específicas
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(datosLimpios.propietario.email)) {
-            return res.status(400).json({ msg: 'Email no válido' });
+        if (!telefono?.trim()) {
+            return res.status(400).json({ 
+                msg: 'El teléfono es obligatorio',
+                campo: 'telefono'
+            });
         }
 
-        if (datosLimpios.paciente.peso && datosLimpios.paciente.peso <= 0) {
-            return res.status(400).json({ msg: 'El peso debe ser mayor a 0' });
+        if (!peso || peso <= 0) {
+            return res.status(400).json({ 
+                msg: 'El peso debe ser mayor a 0',
+                campo: 'peso'
+            });
         }
 
-        // 5. Iniciar conexión y transacción
+        // ✅ 3. Validar formato de teléfono
+        const telefonoLimpio = telefono.toString().replace(/\D/g, '');
+        if (telefonoLimpio.length < 10) {
+            return res.status(400).json({ 
+                msg: 'El teléfono debe tener al menos 10 dígitos',
+                campo: 'telefono'
+            });
+        }
+
+        // ✅ 4. Establecer conexión y iniciar transacción
         connection = await conectarDB();
         await connection.beginTransaction();
 
         try {
-            // 6. Verificar que el doctor existe y está activo
+            // ✅ 5. Verificar que el doctor existe y está activo
             const [doctores] = await connection.execute(
-                `SELECT d.id 
-                 FROM doctores d
+                `SELECT d.id FROM doctores d
                  INNER JOIN usuarios u ON u.id = d.id_usuario
                  WHERE d.id_usuario = ? AND d.estado = 'activo'
                  AND u.account_status = 'active'`,
@@ -86,24 +86,15 @@ const agregarPaciente = async (req, res) => {
             );
 
             if (doctores.length === 0) {
-                throw new Error('Doctor no autorizado');
+                await connection.rollback();
+                return res.status(403).json({ msg: 'Doctor no autorizado o inactivo' });
             }
 
             const id_doctor = doctores[0].id;
 
-            // 7. Verificar si el propietario ya existe por número de teléfono
-            if (!telefono?.trim()) {
-                return res.status(400).json({ msg: 'El número de teléfono es obligatorio' });
-            }
+            // ✅ 6. Buscar o crear propietario por teléfono
+            let id_propietario;
 
-            const telefonoLimpio = telefono.trim().replace(/\D/g, ''); // Elimina caracteres no numéricos
-            
-            // Validar longitud del teléfono (ajusta según tu país)
-            if (telefonoLimpio.length < 10) {
-                return res.status(400).json({ msg: 'Número de teléfono inválido' });
-            }
-
-            // Buscar propietario por teléfono
             const [propietarios] = await connection.execute(
                 `SELECT p.id, p.nombre, p.apellidos, p.email 
                  FROM propietarios p
@@ -112,146 +103,200 @@ const agregarPaciente = async (req, res) => {
                 [telefonoLimpio]
             );
 
-            let id_propietario;
-
             if (propietarios.length === 0) {
-                // 8. Insertar nuevo propietario
+                // ✅ Crear nuevo propietario
                 const [resultPropietario] = await connection.execute(
-                    `INSERT INTO propietarios (nombre, apellidos, email)
-                     VALUES (?, ?, ?)`,
+                    `INSERT INTO propietarios (nombre, apellidos, email, created_at, updated_at)
+                     VALUES (?, ?, ?, NOW(), NOW())`,
                     [
-                        datosLimpios.propietario.nombre,
-                        datosLimpios.propietario.apellidos,
-                        datosLimpios.propietario.email
+                        nombre_propietario.trim(),
+                        (apellidos_propietario || '').trim(),
+                        (email || '').trim().toLowerCase()
                     ]
                 );
                 id_propietario = resultPropietario.insertId;
 
-                // 9. Insertar teléfono si se proporcionó
-                if (telefono?.trim()) {
-                    await connection.execute(
-                        `INSERT INTO telefonos (id_propietario, tipo, numero, principal)
-                         VALUES (?, ?, ?, TRUE)`,
-                        [id_propietario, tipo_telefono || 'celular', telefono.trim()]
-                    );
-                }
+                // ✅ Insertar teléfono principal
+                await connection.execute(
+                    `INSERT INTO telefonos (id_propietario, tipo, numero, principal)
+                     VALUES (?, ?, ?, TRUE)`,
+                    [id_propietario, tipo_telefono, telefonoLimpio]
+                );
 
-                // 10. Insertar dirección si se proporcionó código postal
-                if (datosLimpios.direccion.codigo_postal) {
+                // ✅ Insertar dirección si se proporciona código postal y colonia
+                if (codigo_postal && colonia) {
+                    // Buscar o crear código postal
+                    let id_codigo_postal;
+                    
+                    const [codigosPostales] = await connection.execute(
+                        `SELECT id FROM codigo_postal 
+                         WHERE codigo = ? AND colonia = ? AND id_municipio = ?`,
+                        [codigo_postal, colonia.trim(), id_municipio]
+                    );
+
+                    if (codigosPostales.length === 0) {
+                        // Crear nuevo código postal
+                        const [resultCodigoPostal] = await connection.execute(
+                            `INSERT INTO codigo_postal (id_municipio, codigo, colonia, tipo_asentamiento)
+                             VALUES (?, ?, ?, 'Colonia')`,
+                            [id_municipio, codigo_postal, colonia.trim()]
+                        );
+                        id_codigo_postal = resultCodigoPostal.insertId;
+                    } else {
+                        id_codigo_postal = codigosPostales[0].id;
+                    }
+
+                    // Insertar dirección
                     await connection.execute(
-                        `INSERT INTO direcciones (
-                            id_propietario, tipo, calle, numero_ext, 
-                            numero_int, id_codigo_postal
-                        ) VALUES (?, 'casa', ?, ?, ?, 
-                            (SELECT id FROM codigo_postal 
-                             WHERE codigo = ? AND colonia = ? 
-                             AND id_municipio = ? LIMIT 1)
-                        )`,
+                        `INSERT INTO direcciones (id_propietario, tipo, calle, numero_ext, numero_int, id_codigo_postal, referencias)
+                         VALUES (?, 'casa', ?, ?, ?, ?, ?)`,
                         [
                             id_propietario,
-                            datosLimpios.direccion.calle,
-                            datosLimpios.direccion.numero_ext,
-                            datosLimpios.direccion.numero_int,
-                            datosLimpios.direccion.codigo_postal,
-                            colonia,
-                            datosLimpios.direccion.id_municipio
+                            (calle || '').trim(),
+                            numero_ext,
+                            (numero_int || '').trim(),
+                            id_codigo_postal,
+                            (referencias || '').trim()
                         ]
                     );
                 }
             } else {
-                // El propietario existe, verificar si los datos coinciden
+                // ✅ Usar propietario existente
                 const propietarioExistente = propietarios[0];
                 id_propietario = propietarioExistente.id;
-
-                // Si los datos proporcionados no coinciden con los existentes, informar
-                if (propietarioExistente.nombre.toLowerCase() !== datosLimpios.propietario.nombre.toLowerCase() ||
-                    propietarioExistente.apellidos.toLowerCase() !== datosLimpios.propietario.apellidos.toLowerCase()) {
-                    return res.status(400).json({
-                        msg: 'Ya existe un propietario registrado con este teléfono pero los datos no coinciden',
-                        propietarioExistente: {
-                            nombre: propietarioExistente.nombre,
-                            apellidos: propietarioExistente.apellidos,
-                            email: propietarioExistente.email
-                        }
-                    });
+                
+                // Opcional: Verificar si los datos coinciden
+                const nombreCompleto = `${nombre_propietario} ${apellidos_propietario || ''}`.trim().toLowerCase();
+                const nombreExistente = `${propietarioExistente.nombre} ${propietarioExistente.apellidos || ''}`.trim().toLowerCase();
+                
+                if (nombreCompleto !== nombreExistente) {
+                    console.log(`Propietario existente con datos diferentes: ${nombreExistente} vs ${nombreCompleto}`);
                 }
-
-                // Los datos coinciden, continuamos con el registro del paciente
-                console.log('Usando propietario existente:', propietarioExistente.nombre);
             }
 
-            // 11. Verificar que la raza existe y está activa
-            const [razas] = await connection.execute(
-                'SELECT id FROM razas WHERE id = ? AND activo = TRUE',
-                [datosLimpios.paciente.id_raza]
-            );
-
-            if (razas.length === 0) {
-                throw new Error('Raza no válida');
+            // ✅ 7. Validar raza o usar valor por defecto
+            let id_raza_final = id_raza || 1; // Raza por defecto: "Mestizo"
+            
+            if (id_raza) {
+                const [razas] = await connection.execute(
+                    'SELECT id FROM razas WHERE id = ? AND activo = TRUE',
+                    [id_raza]
+                );
+                
+                if (razas.length === 0) {
+                    console.log(`Raza con ID ${id_raza} no encontrada, usando raza por defecto`);
+                    id_raza_final = 1;
+                }
             }
 
-            // 12. Insertar paciente
+            // ✅ 8. Insertar paciente
             const [resultPaciente] = await connection.execute(
                 `INSERT INTO pacientes (
                     id_propietario, id_doctor, id_usuario, id_raza, 
-                    nombre_mascota, fecha_nacimiento, peso, foto_url
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                    nombre_mascota, fecha_nacimiento, peso, foto_url, estado,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'activo', NOW(), NOW())`,
                 [
                     id_propietario,
-                    id_doctor,           // Nuevo campo
-                    req.usuario.id,      // Nuevo campo
-                    datosLimpios.paciente.id_raza,
-                    datosLimpios.paciente.nombre,
-                    datosLimpios.paciente.fecha_nacimiento,
-                    datosLimpios.paciente.peso,
-                    datosLimpios.paciente.foto_url
+                    id_doctor,
+                    req.usuario.id,
+                    id_raza_final,
+                    nombre_mascota.trim(),
+                    fecha_nacimiento || null,
+                    parseFloat(peso),
+                    foto_url
                 ]
             );
 
-            // 13. Registrar en audit_logs
+            const id_paciente = resultPaciente.insertId;
+
+            // ✅ 9. Registrar en audit_logs
             await connection.execute(
                 `INSERT INTO audit_logs (
-                    tabla, id_registro, id_usuario, 
-                    accion, datos_nuevos
-                ) VALUES ('pacientes', ?, ?, 'crear', ?)`,
+                    tabla, id_registro, id_usuario, accion, datos_nuevos, created_at
+                ) VALUES ('pacientes', ?, ?, 'crear', ?, NOW())`,
                 [
-                    resultPaciente.insertId,
+                    id_paciente,
                     req.usuario.id,
-                    JSON.stringify(datosLimpios)
+                    JSON.stringify({
+                        paciente_id: id_paciente,
+                        nombre_mascota: nombre_mascota.trim(),
+                        propietario: `${nombre_propietario} ${apellidos_propietario || ''}`.trim(),
+                        telefono: telefonoLimpio
+                    })
                 ]
             );
 
-            // 14. Commit de la transacción
+            // ✅ 10. Confirmar transacción
             await connection.commit();
 
-            // 15. Respuesta exitosa
-            res.json({
+            // ✅ 11. Obtener datos completos del paciente recién creado para respuesta
+            const [pacienteCompleto] = await connection.execute(
+                `SELECT 
+                    p.id,
+                    p.nombre_mascota,
+                    p.fecha_nacimiento,
+                    p.peso,
+                    p.foto_url,
+                    p.estado,
+                    p.created_at,
+                    r.nombre AS nombre_raza,
+                    e.nombre AS especie,
+                    pr.nombre AS nombre_propietario,
+                    pr.apellidos AS apellidos_propietario,
+                    pr.email,
+                    t.numero AS telefono_principal
+                FROM pacientes p
+                LEFT JOIN razas r ON p.id_raza = r.id
+                LEFT JOIN especies e ON r.id_especie = e.id
+                LEFT JOIN propietarios pr ON p.id_propietario = pr.id
+                LEFT JOIN telefonos t ON t.id_propietario = pr.id AND t.principal = 1
+                WHERE p.id = ?`,
+                [id_paciente]
+            );
+
+            // ✅ 12. Respuesta exitosa con datos completos
+            res.status(201).json({
                 msg: 'Paciente registrado correctamente',
-                id_paciente: resultPaciente.insertId,
-                id_propietario
+                success: true,
+                data: pacienteCompleto[0] || {
+                    id: id_paciente,
+                    nombre_mascota: nombre_mascota.trim(),
+                    propietario: `${nombre_propietario} ${apellidos_propietario || ''}`.trim()
+                }
             });
 
-        } catch (error) {
-            // 16. Rollback en caso de error
+        } catch (transactionError) {
+            // ✅ Rollback en caso de error en la transacción
             await connection.rollback();
-            throw error;
+            throw transactionError;
         }
 
     } catch (error) {
         console.error('Error en agregarPaciente:', error);
-        res.status(500).json({ 
-            msg: error.message || 'Error al registrar el paciente' 
+        
+        // ✅ Respuesta de error más informativa
+        const statusCode = error.message.includes('obligatorio') ? 400 : 500;
+        const mensaje = error.message || 'Error interno del servidor';
+        
+        res.status(statusCode).json({ 
+            msg: mensaje,
+            success: false,
+            error: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
+        
     } finally {
+        // ✅ Asegurar cierre de conexión
         if (connection) {
             try {
                 await connection.end();
-            } catch (error) {
-                console.error('Error al cerrar conexión:', error);
+            } catch (closeError) {
+                console.error('Error al cerrar conexión:', closeError);
             }
         }
     }
 };
+
 const obtenerPacientes = async (req, res) => {
     let connection;
     try {

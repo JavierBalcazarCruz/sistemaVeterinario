@@ -1,3 +1,4 @@
+// RegistroCliente.jsx - Versión Corregida
 import "../assets/registrarPaciente/styles/style.css";
 import { useState } from "react";
 import logo from "../assets/registrarPaciente/images/logo.png";
@@ -25,7 +26,6 @@ const RegistroCliente = () => {
     }
   };
 
-
   const prevStep = () => {
     setActive((prev) => (prev > 1 ? prev - 1 : 1));
   };
@@ -50,17 +50,14 @@ const RegistroCliente = () => {
   const [estado, setEstado] = useState("");
   const [consentimiento, setConsentimiento] = useState(false);
 
-  //Lo que retorna el provider es un objeto , y guardarPaciente se tiene disponible en el provider
   const { guardarPaciente } = usePacientes();
 
   const handleCodigoPostalChange = (e) => {
     const value = e.target.value;
-    // Validar que solo sean números y limitar a 5 caracteres
     if (/^\d{0,5}$/.test(value)) {
       setcPostal(value);
     }
   };
-
 
   const mostrarAlerta = (titulo, texto, rutaImg, altImg) => {
     Swal.fire({
@@ -68,21 +65,9 @@ const RegistroCliente = () => {
       text: texto,
       imageUrl: rutaImg,
       imageAlt: altImg,
-      customClass: {
-        popup: 'swal2-popup',
-        title: 'swal2-title',
-        content: 'swal2-content',
-        confirmButton: 'swal2-actions button'
-      },
-      backdrop: `
-        rgba(0,0,0,0.4)
-        url(${rutaImg})
-        left top
-        no-repeat
-      `,
-    
     });
   };
+
   const validarCampos = (paso) => {
     let camposVacios = [];
     switch(paso) {
@@ -95,28 +80,23 @@ const RegistroCliente = () => {
         break;
       case 2:
         if (!celular) camposVacios.push("Celular");
-        if (!telefonoCasa) camposVacios.push("Teléfono Casa");
         if (!email) camposVacios.push("Correo electrónico");
         break;
       case 3:
         if (!nombreMascota) camposVacios.push("Nombre de la mascota");
         if (!especie) camposVacios.push("Especie");
         if (!raza) camposVacios.push("Raza");
-        if (!edad) camposVacios.push("Edad");
-        if (!sexo) camposVacios.push("Sexo");
-        if (!color) camposVacios.push("Color");
         if (!peso) camposVacios.push("Peso");
-        if (!fechaNacimiento) camposVacios.push("Fecha de nacimiento");
-        if (!vacunas) camposVacios.push("Vacunas");
-        if (!operado) camposVacios.push("Operado");
         if (!consentimiento) camposVacios.push("Consentimiento");
         break;
     }
     return camposVacios;
   };
-  //Validacion donde todos los campos son obligatorios para el registro del cliente
+
+  // ✅ CORRECCIÓN PRINCIPAL: Mapear datos correctamente para el backend
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
     const camposVacios = validarCampos(3);
     if (camposVacios.length > 0) {
       mostrarAlerta(
@@ -125,65 +105,116 @@ const RegistroCliente = () => {
         cVacios,
         "Gato observándote porque hay campos vacíos"
       );
-    } else {
-      //Pasamos como objeto de tipo paciente y pasamos todo el arreglo
-      guardarPaciente({
-        nombreMascota,
-        propietario,
-        email,
-        direccion,
-        colonia,
-        telefonoCasa,
-        raza,
-        cPostal,
-        especie,
-        celular,
-        edad,
-        fechaNacimiento,
-        peso,
-        color,
-        sexo,
-        operado,
-        vacunas,
-        estado,
-        consentimiento,
-      });
-      //Mostrar mensaje de alerta de registro exitoso
-      mostrarAlerta(
-        "🎉 Registro exitoso🎉",
-        "Usted tiene un paciente nuevo",
-        registroOk,
-        "Gato observandote por que estan vacios los campos"
-      );
-      //limpiar los campos
-      setNombreMascota("");
-      setPropietario("");
-      setEmail("");
-      setCelular("");
-      setFechaNacimiento("");
-      setDireccion("");
-      setcPostal("");
-      setColonia("");
-      setTelefonoCasa("");
-      setRaza("");
-      setPeso("");
-      setEdad("");
-      setColor("");
-      setEspecie("");
-      setSexo("");
-      setOperado("");
-      setVacunas("");
-      setEstado("");
-      setConsentimiento(false);
-      setActive(1);
+      return;
     }
+
+    try {
+      // ✅ Separar nombre y apellidos del propietario
+      const nombreCompleto = propietario.trim().split(' ');
+      const nombre_propietario = nombreCompleto[0] || '';
+      const apellidos_propietario = nombreCompleto.slice(1).join(' ') || '';
+
+      // ✅ Mapear datos según estructura esperada por el backend
+      const pacienteData = {
+        // Datos del propietario (nombres de campos correctos)
+        nombre_propietario,
+        apellidos_propietario,
+        email: email.trim(),
+        telefono: celular.replace(/\D/g, ''), // Solo números
+        tipo_telefono: 'celular',
+        
+        // Datos de dirección
+        calle: direccion.trim(),
+        numero_ext: '1', // Valor por defecto
+        numero_int: '',
+        codigo_postal: cPostal,
+        colonia: colonia.trim(),
+        id_municipio: 1, // Por defecto - debería configurarse según el estado
+        referencias: '',
+        
+        // Datos del paciente/mascota
+        nombre_mascota: nombreMascota.trim(),
+        fecha_nacimiento: fechaNacimiento || null,
+        peso: parseFloat(peso) || 0,
+        id_raza: getIdRaza(raza, especie), // Función auxiliar para mapear raza
+        foto_url: null
+      };
+
+      console.log('Datos a enviar:', pacienteData); // Para debugging
+
+      await guardarPaciente(pacienteData);
+      
+      mostrarAlerta(
+        "🎉 Registro exitoso 🎉",
+        "El paciente ha sido registrado correctamente",
+        registroOk,
+        "Registro exitoso"
+      );
+
+      // Limpiar formulario
+      limpiarFormulario();
+      setActive(1);
+
+    } catch (error) {
+      console.error('Error en registro:', error);
+      mostrarAlerta(
+        "❌ Error en el registro ❌",
+        "Hubo un problema al registrar el paciente. Por favor, inténtalo de nuevo.",
+        cVacios,
+        "Error en el registro"
+      );
+    }
+  };
+
+  // ✅ Función auxiliar para mapear raza a ID
+  const getIdRaza = (razaNombre, especieNombre) => {
+    // Mapeo básico - deberías obtener esto de una API
+    const razasMap = {
+      'perro': {
+        'mestizo': 1,
+        'labrador': 2,
+        'golden retriever': 3,
+      },
+      'gato': {
+        'mestizo': 4,
+        'siamés': 5,
+      },
+      'otro': {
+        'otro': 6,
+      }
+    };
+    
+    const especieLower = especieNombre?.toLowerCase() || 'perro';
+    const razaLower = razaNombre?.toLowerCase() || 'mestizo';
+    
+    return razasMap[especieLower]?.[razaLower] || 1;
+  };
+
+  const limpiarFormulario = () => {
+    setNombreMascota("");
+    setPropietario("");
+    setEmail("");
+    setCelular("");
+    setFechaNacimiento("");
+    setDireccion("");
+    setcPostal("");
+    setColonia("");
+    setTelefonoCasa("");
+    setRaza("");
+    setPeso("");
+    setEdad("");
+    setColor("");
+    setEspecie("");
+    setSexo("");
+    setOperado("");
+    setVacunas("");
+    setEstado("");
+    setConsentimiento(false);
   };
 
   const handleConsentimientoChange = (e) => {
     setConsentimiento(e.target.checked);
   };
-
-  
 
   return (
     <div className="background-page">
@@ -192,51 +223,36 @@ const RegistroCliente = () => {
           <div className="form-box glassmorphism">
             <div className="progreso glassmorphism">
               <div className="logo-registro">
-                <a href="#">
-                  <img src={logo} alt="Logo" className="logo-reg" />{" "}
-                  {/* Reemplaza el texto con la imagen */}
-                </a>
+                <img src={logo} alt="Logo" className="logo-reg" />
               </div>
               <ul className="progress-steps">
                 <li className={`step ${active === 1 ? "active" : ""}`}>
                   <span>1</span>
-                  <p>
-                    Cliente <br />
-                    <span className="desc">25 secs to complete</span>
-                  </p>
+                  <p>Cliente <br /><span className="desc">25 secs to complete</span></p>
                 </li>
                 <li className={`step ${active === 2 ? "active" : ""}`}>
                   <span>2</span>
-                  <p>
-                    Continuación <br />
-                    <span className="desc">60 secs to complete</span>
-                  </p>
+                  <p>Continuación <br /><span className="desc">60 secs to complete</span></p>
                 </li>
                 <li className={`step ${active === 3 ? "active" : ""}`}>
                   <span>3</span>
-                  <p>
-                    Mascota <br />
-                    <span className="desc">30 secs to complete</span>
-                  </p>
+                  <p>Mascota <br /><span className="desc">30 secs to complete</span></p>
                 </li>
               </ul>
             </div>
             <form onSubmit={handleSubmit}>
-              <div
-                className={`form-one form-step  ${
-                  active === 1 ? "active" : "form-step-hidden"
-                }`}
-              >
+              {/* Paso 1 - Información del cliente */}
+              <div className={`form-one form-step ${active === 1 ? "active" : "form-step-hidden"}`}>
                 <div className="bg-svg"></div>
                 <h2 className="subtitulos">Información del cliente</h2>
                 <p>Ingrese la información personal del cliente</p>
                 <div>
-                  <label htmlFor="propietario">Nombre del propietario</label>
+                  <label htmlFor="propietario">Nombre completo del propietario</label>
                   <input
                     id="propietario"
                     type="text"
                     className="form-input"
-                    placeholder="Escribe tu nombre completo"
+                    placeholder="Nombre y apellidos completos"
                     value={propietario}
                     onChange={(e) => setPropietario(e.target.value)}
                     required
@@ -247,7 +263,7 @@ const RegistroCliente = () => {
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="Escribe tu dirección"
+                    placeholder="Calle y número"
                     value={direccion}
                     onChange={(e) => setDireccion(e.target.value)}
                     required
@@ -263,7 +279,7 @@ const RegistroCliente = () => {
                     required
                   >
                     <option value="">Selecciona el estado</option>
-                    <option value="Aguascalientes">Aguascalientes</option>
+                   <option value="Aguascalientes">Aguascalientes</option>
                     <option value="Baja California">Baja California</option>
                     <option value="Baja California Sur">
                       Baja California Sur
@@ -304,12 +320,10 @@ const RegistroCliente = () => {
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="Escribe tu código postal"
+                    placeholder="5 dígitos"
                     value={cPostal}
                     onChange={handleCodigoPostalChange}
                     maxLength={5}
-                    pattern="\d{5}"
-                    title="El código postal debe contener 5 dígitos"
                     required
                   />
                 </div>
@@ -318,40 +332,39 @@ const RegistroCliente = () => {
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="Escribe tu colonia"
+                    placeholder="Nombre de la colonia"
                     value={colonia}
                     onChange={(e) => setColonia(e.target.value)}
+                    required
                   />
                 </div>
               </div>
-              <div
-                className={`form-two form-step  ${
-                  active === 2 ? "active" : "form-step-hidden"
-                }`}
-              >
+
+              {/* Paso 2 - Contacto */}
+              <div className={`form-two form-step ${active === 2 ? "active" : "form-step-hidden"}`}>
                 <div className="bg-svg"></div>
-                <h2 className="subtitulos">Información del cliente</h2>
-                <p>Ingrese la información personal del cliente</p>
+                <h2 className="subtitulos">Información de contacto</h2>
+                <p>Datos para comunicarnos contigo</p>
                 <div>
-                  <label>Celular</label>
+                  <label>Celular (obligatorio)</label>
                   <input
                     type="tel"
                     className="form-input"
-                    placeholder="Escribe tu número de celular"
+                    placeholder="10 dígitos sin espacios"
                     value={celular}
-                    onChange={(e) => setCelular(e.target.value)}
+                    onChange={(e) => setCelular(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    maxLength={10}
                     required
                   />
                 </div>
                 <div>
-                  <label>Teléfono Casa</label>
+                  <label>Teléfono Casa (opcional)</label>
                   <input
                     type="tel"
                     className="form-input"
-                    placeholder="Escribe tu número de teléfono de casa"
+                    placeholder="Número de casa (opcional)"
                     value={telefonoCasa}
                     onChange={(e) => setTelefonoCasa(e.target.value)}
-                    required
                   />
                 </div>
                 <div>
@@ -360,17 +373,16 @@ const RegistroCliente = () => {
                     id="email"
                     type="email"
                     className="form-input"
-                    placeholder="Escribe tu correo electrónico"
+                    placeholder="ejemplo@correo.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    required
                   />
                 </div>
               </div>
-              <div
-                className={`form-three form-step  ${
-                  active === 3 ? "active" : "form-step-hidden"
-                }`}
-              >
+
+              {/* Paso 3 - Datos de la mascota */}
+              <div className={`form-three form-step ${active === 3 ? "active" : "form-step-hidden"}`}>
                 <div className="bg-svg"></div>
                 <h2 className="subtitulos">Datos de la mascota</h2>
                 <div>
@@ -379,14 +391,14 @@ const RegistroCliente = () => {
                     id="mascota"
                     type="text"
                     className="form-input"
-                    placeholder="Escribe el nombre de tu mascota"
+                    placeholder="Nombre de la mascota"
                     value={nombreMascota}
                     onChange={(e) => setNombreMascota(e.target.value)}
                     required
                   />
                 </div>
                 <div>
-                  <label>Especie </label>
+                  <label>Especie</label>
                   <select
                     name="especie"
                     className="form-input select-color-text"
@@ -405,20 +417,33 @@ const RegistroCliente = () => {
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="Escribe la raza de tu mascota"
+                    placeholder="Raza de la mascota"
                     value={raza}
                     onChange={(e) => setRaza(e.target.value)}
                     required
                   />
                 </div>
                 <div>
-                  <label>Edad</label>
+                  <label>Peso en Kg</label>
                   <input
                     type="number"
                     className="form-input"
-                    value={edad}
-                    onChange={(e) => setEdad(e.target.value)}
-                    placeholder="Escribe edad de tu mascota"
+                    placeholder="Peso en kilogramos"
+                    value={peso}
+                    onChange={(e) => setPeso(e.target.value)}
+                    step="0.1"
+                    min="0.1"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="fechaNacimiento">Fecha de nacimiento (opcional)</label>
+                  <input
+                    id="fechaNacimiento"
+                    type="date"
+                    className="form-input"
+                    value={fechaNacimiento}
+                    onChange={(e) => setFechaNacimiento(e.target.value)}
                   />
                 </div>
                 <div>
@@ -428,7 +453,6 @@ const RegistroCliente = () => {
                     className="form-input select-color-text"
                     value={sexo}
                     onChange={(e) => setSexo(e.target.value)}
-                    required
                   >
                     <option value="">Selecciona el sexo</option>
                     <option value="hembra">Hembra</option>
@@ -436,43 +460,15 @@ const RegistroCliente = () => {
                   </select>
                 </div>
                 <div>
-                  <label>Color</label>
+                  <label>Color (opcional)</label>
                   <input
                     type="text"
                     className="form-input"
+                    placeholder="Color de la mascota"
                     value={color}
                     onChange={(e) => setColor(e.target.value)}
-                    placeholder="Escribe el color de tu mascota"
                   />
                 </div>
-                <div>
-                  <label>Peso en Kg.</label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    placeholder="Escribe el peso de tu mascota"
-                    value={peso}
-                    onChange={(e) => setPeso(e.target.value)}
-                    step="0.01"
-                    required
-                  />
-                </div>
-                <div className="birth">
-                  <label htmlFor="fechaNacimiento">Fecha de nacimiento</label>
-                  <input
-                    id="fechaNacimiento"
-                    type="date"
-                    className="form-input"
-                    value={fechaNacimiento}
-                    onChange={(e) => setFechaNacimiento(e.target.value)}
-                  />
-                  {/* <div className="grouping">
-                    <input type="text" className="form-input" pattern="[0-9]*" name="day" placeholder="DD" />
-                    <input type="text" className="form-input" pattern="[0-9]*" name="month" placeholder="MM" />
-                    <input type="text" className="form-input" pattern="[0-9]*" name="year" placeholder="YYYY" />
-                  </div> */}
-                </div>
-
                 <div>
                   <label>¿Cuenta con todas las vacunas?</label>
                   <select
@@ -480,7 +476,6 @@ const RegistroCliente = () => {
                     value={vacunas}
                     onChange={(e) => setVacunas(e.target.value)}
                     className="form-input select-color-text"
-                    required
                   >
                     <option value="">Selecciona una opción</option>
                     <option value="si">Sí</option>
@@ -494,7 +489,6 @@ const RegistroCliente = () => {
                     className="form-input select-color-text"
                     value={operado}
                     onChange={(e) => setOperado(e.target.value)}
-                    required
                   >
                     <option value="">Selecciona una opción</option>
                     <option value="si">Sí</option>
@@ -510,38 +504,35 @@ const RegistroCliente = () => {
                     required
                   />
                   <label htmlFor="consentimiento">
-                    Estoy de acuerdo con la recopilación de información mía y de
-                    mi mascota
+                    Estoy de acuerdo con la recopilación de información mía y de mi mascota
                   </label>
                 </div>
               </div>
+
+              {/* Botones de navegación */}
               <div className="btn-group">
-      {active === 1 && (
-        <Link to="/admin" className="btn-prev app">
-          Home
-        </Link>
-      )}
+                {active === 1 && (
+                  <Link to="/admin" className="btn-prev app">
+                    Home
+                  </Link>
+                )}
 
-      {(active === 2 || active === 3) && (
-        <button type="button" className="btn-prev" onClick={prevStep}>
-          Regresar
-        </button>
-      )}
+                {(active === 2 || active === 3) && (
+                  <button type="button" className="btn-prev" onClick={prevStep}>
+                    Regresar
+                  </button>
+                )}
 
-      {active < steps && (
-        <button
-          type="button"
-          className="btn-next"
-          onClick={nextStep}
-        >
-          Siguiente
-        </button>
-      )}
+                {active < steps && (
+                  <button type="button" className="btn-next" onClick={nextStep}>
+                    Siguiente
+                  </button>
+                )}
 
-      {active === steps && (
-        <button type="submit" className="btn-submit">
-          Registrar paciente
-        </button>
+                {active === steps && (
+                  <button type="submit" className="btn-submit">
+                    Registrar paciente
+                  </button>
                 )}
               </div>
             </form>
